@@ -1,0 +1,13 @@
+menu "Sync configuration"
+    config SYNC_WIFI_SSID
+        string "SYNC: WiFi SSID"
+        default "VogonMothership"
+
+    config SYNC_WIFI_PASSWORD
+        string "SYNC: WiFi Password"
+        default "DontPanic!42"
+
+    config SYNC_MQTT_BROKER
+        string "SYNC: MQTT broker"
+        default "mqtt://192.168.0.1"
+endmenu

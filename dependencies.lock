@@ -1,0 +1,36 @@
+dependencies:
+  dht:
+    component_hash: 5f3bed365a4775a403a9e7d339609dbbe5121680b53f37fc46bb777bc918d049
+    dependencies: []
+    source:
+      git: https://github.com/UncleRus/esp-idf-lib.git
+      path: components/dht/
+      type: git
+    version: a02cd6bb5190cab379125140780adcb8d88f9650
+  esp_idf_lib_helpers:
+    component_hash: 798b1a6294af807374e9de099905af9a9b779a27068437c2912a7232b87dc6ac
+    dependencies: []
+    source:
+      git: https://github.com/UncleRus/esp-idf-lib.git
+      path: components/esp_idf_lib_helpers/
+      type: git
+    version: a02cd6bb5190cab379125140780adcb8d88f9650
+  idf:
+    source:
+      type: idf
+    version: 6.0.0
+  ssd1306:
+    component_hash: c118e111d989d2b427ff714bab329405d76deff181bd1bb7356b3b19e74c141b
+    dependencies: []
+    source:
+      git: https://github.com/nopnop2002/esp-idf-ssd1306.git
+      path: components/ssd1306/
+      type: git
+    version: d606b601d0fbe7e7789ed064ac3f048bd62de8e8
+direct_dependencies:
+- dht
+- esp_idf_lib_helpers
+- ssd1306
+manifest_hash: 9f48f0f312fd3617c99c170b2fb3d232cd80e7a2b6c8f52b192d4619169520be
+target: esp32
+version: 2.0.0
