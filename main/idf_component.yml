@@ -1,4 +1,4 @@
 dependencies:
-  ssd1306:
-    path: components/ssd1306/
-    git: https://github.com/nopnop2002/esp-idf-ssd1306.git
+    ssd1306:
+        path: components/ssd1306/
+        git: https://github.com/nopnop2002/esp-idf-ssd1306.git
