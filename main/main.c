@@ -1,5 +1,6 @@
 #include "stdio.h"
 
+#include "driver/rtc_io.h"
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_sleep.h"
@@ -8,6 +9,7 @@
 
 #include "ssd1306.h"
 
+#include "bluetooth.h"
 #include "helpers.h"
 #include "sensors.h"
 #include "shared.h"
@@ -18,17 +20,36 @@ static const char *TAG = "MODULE[MAIN]";
 // Change this to the number of tasks
 #define TASK_COUNT 2
 
+#define WAKE_GPIO GPIO_NUM_0
+
 void app_main(void) {
 	ESP_LOGI(TAG, "Booting Vogon...");
 
-	// NVS flash for some reason (required by WiFi and MQTT)
+	// NVS flash for some reason (required by WiFi, MQTT and BLE)
 	esp_err_t ret = nvs_flash_init();
 	if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
 		ESP_ERROR_CHECK(nvs_flash_erase());
 		ret = nvs_flash_init();
+		ESP_ERROR_CHECK(ret);
 	}
 
-	ESP_ERROR_CHECK(ret);
+	// Detect wakeup cause and choose device mode
+	// (boot button press - bluetooth configuration mode, otherwise normal operation)
+	esp_reset_reason_t reset_reason = esp_reset_reason();
+	esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
+
+	rtc_gpio_hold_dis(WAKE_GPIO);	  // Allow GPIO pin reconfiguration
+	rtc_gpio_pullup_dis(WAKE_GPIO);	  // Clear any previous pull-ups
+	rtc_gpio_pulldown_dis(WAKE_GPIO); // Clear any previous pull-downs
+
+	ESP_LOGI(TAG, "Reset reason: %d", reset_reason);
+	ESP_LOGI(TAG, "Wakeup cause: %d", wakeup_cause);
+
+	if (wakeup_cause == ESP_SLEEP_WAKEUP_EXT0) {
+		ESP_LOGI(TAG, "Woke up from BOOT button press - starting Bluetooth configuration mode");
+		bluetooth_gatt_server_start();
+		return;
+	}
 
 	// Init TCP/IP stack
 	ESP_ERROR_CHECK(esp_netif_init());
@@ -108,5 +129,10 @@ void app_main(void) {
 	vTaskDelay(pdMS_TO_TICKS(10000));
 
 	ESP_LOGI(TAG, "Going to sleep for 10 minutes...");
+
+	rtc_gpio_pullup_dis(WAKE_GPIO);	 // Make sure pull-up is off
+	rtc_gpio_pulldown_en(WAKE_GPIO); // Have GPIO pin default to LOW
+	esp_sleep_enable_ext0_wakeup(WAKE_GPIO, 0);
+	rtc_gpio_hold_en(WAKE_GPIO); // Freeze GPIO configuration
 	esp_deep_sleep(CONFIG_VOGON_MEASUREMENT_INTERVAL * 60 * 1000000);
 }
