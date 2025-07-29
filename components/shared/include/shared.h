@@ -5,6 +5,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
+#define DEVICE_NAME "Vogon"
+#define NVS_FLASH_APP "nvs_app"
+
 typedef struct
 {
 	float temperature;

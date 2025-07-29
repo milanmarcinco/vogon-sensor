@@ -17,13 +17,14 @@
 
 #include "internal/led.h"
 
+#include "shared.h"
+
 static const char *TAG = "MODULE[BLUETOOTH]";
 static const char *TAG_MAIN = "MODULE[BLUETOOTH][MAIN]";
 static const char *TAG_GATTS = "MODULE[BLUETOOTH][GATTS]";
 static const char *TAG_GATTS_PROFILE = "MODULE[BLUETOOTH][GATTS_PROFILE]";
 static const char *TAG_GAP = "MODULE[BLUETOOTH][GAP]";
 
-#define DEVICE_NAME "Vogon"
 #define NVS_NAMESPACE "vogon"
 
 #define PROFILE_NUM 1 // Number of profiles in total
@@ -495,7 +496,7 @@ void bluetooth_gatt_server_start() {
 
 static nvs_handle_t open_nvs_handle() {
 	nvs_handle_t nvs_handle;
-	esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
+	esp_err_t ret = nvs_open_from_partition(NVS_FLASH_APP, NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
 
 	if (ret != ESP_OK) {
 		ESP_LOGE(TAG, "Error opening NVS handle: %s", esp_err_to_name(ret));

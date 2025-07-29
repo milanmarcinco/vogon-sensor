@@ -24,12 +24,20 @@ static const char *TAG = "MODULE[MAIN]";
 
 void app_main(void) {
 	ESP_LOGI(TAG, "Booting Vogon...");
+	esp_err_t ret;
 
 	// NVS flash required by WiFi, MQTT and BLE
-	esp_err_t ret = nvs_flash_init();
+	ret = nvs_flash_init();
 	if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
 		ESP_ERROR_CHECK(nvs_flash_erase());
 		ESP_ERROR_CHECK(nvs_flash_init());
+	}
+
+	// Also flash app-specific NVS partition
+	ret = nvs_flash_init_partition(NVS_FLASH_APP);
+	if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+		ESP_ERROR_CHECK(nvs_flash_erase_partition(NVS_FLASH_APP));
+		ESP_ERROR_CHECK(nvs_flash_init_partition(NVS_FLASH_APP));
 	}
 
 	// Detect wakeup cause and choose device mode
