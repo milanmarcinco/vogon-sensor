@@ -18,8 +18,8 @@
 
 static EventGroupHandle_t connection_event_group;
 
-const int WIFI_CONNECTED_BIT = BIT0;
-const int MQTT_CONNECTED_BIT = BIT1;
+static const int WIFI_CONNECTED_BIT = BIT0;
+static const int MQTT_CONNECTED_BIT = BIT1;
 
 static const char *TAG = "MODULE[SYNC]";
 
@@ -39,23 +39,23 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 	// esp_mqtt_client_handle_t client = event->client;
 
 	switch (event_id) {
-	case MQTT_EVENT_CONNECTED:
-		xEventGroupSetBits(connection_event_group, MQTT_CONNECTED_BIT);
-		ESP_LOGD(TAG, "MQTT_EVENT_CONNECTED");
-		break;
-	case MQTT_EVENT_DISCONNECTED:
-		xEventGroupClearBits(connection_event_group, MQTT_CONNECTED_BIT);
-		ESP_LOGW(TAG, "MQTT_EVENT_DISCONNECTED");
-		break;
-	case MQTT_EVENT_PUBLISHED:
-		ESP_LOGD(TAG, "MQTT_EVENT_PUBLISHED");
-		break;
-	default:
-		break;
+		case MQTT_EVENT_CONNECTED:
+			xEventGroupSetBits(connection_event_group, MQTT_CONNECTED_BIT);
+			ESP_LOGD(TAG, "MQTT_EVENT_CONNECTED");
+			break;
+		case MQTT_EVENT_DISCONNECTED:
+			xEventGroupClearBits(connection_event_group, MQTT_CONNECTED_BIT);
+			ESP_LOGW(TAG, "MQTT_EVENT_DISCONNECTED");
+			break;
+		case MQTT_EVENT_PUBLISHED:
+			ESP_LOGD(TAG, "MQTT_EVENT_PUBLISHED");
+			break;
+		default:
+			break;
 	}
 }
 
-void get_mac_address_string(char *mac_str) {
+static void get_mac_address_string(char *mac_str) {
 	uint8_t mac[6];
 	ESP_ERROR_CHECK(esp_wifi_get_mac(ESP_IF_WIFI_STA, mac));
 	snprintf(mac_str, MAC_LEN, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -83,7 +83,7 @@ static void publish(esp_mqtt_client_handle_t *client, const uint16_t sensor, con
 	cJSON_Delete(root);
 }
 
-void sync() {
+void mqtt_sync() {
 	connection_event_group = xEventGroupCreate();
 
 	ESP_ERROR_CHECK(esp_event_loop_create_default());

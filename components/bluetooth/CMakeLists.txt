@@ -1,5 +1,5 @@
 idf_component_register(
-  SRCS "bluetooth.c"
+  SRCS "bluetooth.c" "internal/led.c"
   INCLUDE_DIRS "include"
-  REQUIRES bt nvs_flash led
+  REQUIRES bt esp_driver_gpio nvs_flash
 )

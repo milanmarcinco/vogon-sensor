@@ -15,7 +15,7 @@
 
 bt_led_state_t bt_led_state = LED_OFF;
 
-void led() {
+void led_task() {
 	gpio_reset_pin(LED_GPIO);
 	gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);
 

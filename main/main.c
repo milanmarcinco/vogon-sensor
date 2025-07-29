@@ -17,7 +17,7 @@
 
 static const char *TAG = "MODULE[MAIN]";
 
-// Change this to the number of tasks
+// Number of concurrent tasks running measurements to wait for before MQTT sync
 #define TASK_COUNT 2
 
 #define WAKE_GPIO GPIO_NUM_0
@@ -25,16 +25,16 @@ static const char *TAG = "MODULE[MAIN]";
 void app_main(void) {
 	ESP_LOGI(TAG, "Booting Vogon...");
 
-	// NVS flash for some reason (required by WiFi, MQTT and BLE)
+	// NVS flash required by WiFi, MQTT and BLE
 	esp_err_t ret = nvs_flash_init();
 	if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
 		ESP_ERROR_CHECK(nvs_flash_erase());
-		ret = nvs_flash_init();
-		ESP_ERROR_CHECK(ret);
+		ESP_ERROR_CHECK(nvs_flash_init());
 	}
 
 	// Detect wakeup cause and choose device mode
-	// (boot button press - bluetooth configuration mode, otherwise normal operation)
+	// - boot button press - bluetooth configuration mode
+	// - otherwise normal operation
 	esp_reset_reason_t reset_reason = esp_reset_reason();
 	esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
 
@@ -61,7 +61,7 @@ void app_main(void) {
 	ssd1306_contrast(&screen, 0xff);
 	ssd1306_clear_screen(&screen, false);
 
-	// Initialize semaphore to number of tasks
+	// Initialize semaphore to number of concurrent tasks
 	sync_mutex = xSemaphoreCreateCounting(TASK_COUNT, 0);
 
 	shared_data.temperature = 0;
@@ -94,7 +94,7 @@ void app_main(void) {
 
 	ESP_LOGI(TAG, "All tasks are pinned!");
 
-	// Wait for tasks to finish
+	// Wait for concurrent tasks to finish
 	for (int i = 0; i < TASK_COUNT; i++) {
 		if (xSemaphoreTake(sync_mutex, portMAX_DELAY) != pdTRUE) {
 			ESP_LOGE(TAG, "Failed to take semaphore!");
@@ -124,7 +124,7 @@ void app_main(void) {
 	free(pm10_str);
 
 	ESP_LOGI(TAG, "Sending data to MQTT broker...");
-	sync();
+	mqtt_sync();
 
 	vTaskDelay(pdMS_TO_TICKS(10000));
 

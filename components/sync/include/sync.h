@@ -1,1 +1,1 @@
-void sync();
+void mqtt_sync();

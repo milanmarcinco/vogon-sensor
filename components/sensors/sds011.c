@@ -15,11 +15,11 @@
 
 static const char *TAG = "MODULE[SDS011]";
 
-const uint8_t ACTIVE_MODE = 0x00;
-const uint8_t QUERY_MODE = 0x01;
+static const uint8_t ACTIVE_MODE = 0x00;
+static const uint8_t QUERY_MODE = 0x01;
 
-const uint8_t WORK_STATE = 0x01;
-const uint8_t SLEEP_STATE = 0x00;
+static const uint8_t WORK_STATE = 0x01;
+static const uint8_t SLEEP_STATE = 0x00;
 
 static esp_err_t sds011_send_command(const uint8_t payload[13], char *response) {
 	int len;

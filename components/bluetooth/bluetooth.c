@@ -15,7 +15,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-#include "led.h"
+#include "internal/led.h"
 
 static const char *TAG = "MODULE[BLUETOOTH]";
 static const char *TAG_MAIN = "MODULE[BLUETOOTH][MAIN]";
@@ -436,7 +436,7 @@ void bluetooth_gatt_server_start() {
 	bt_led_state = LED_OFF;
 
 	xTaskCreatePinnedToCore(
-		led,
+		led_task,
 		"led",
 		configMINIMAL_STACK_SIZE * 8,
 		NULL,
