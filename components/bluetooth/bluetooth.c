@@ -16,6 +16,7 @@
 #include "nvs_flash.h"
 
 #include "internal/led.h"
+#include "internal/nvs_app.h"
 
 #include "shared.h"
 
@@ -24,8 +25,6 @@ static const char *TAG_MAIN = "MODULE[BLUETOOTH][MAIN]";
 static const char *TAG_GATTS = "MODULE[BLUETOOTH][GATTS]";
 static const char *TAG_GATTS_PROFILE = "MODULE[BLUETOOTH][GATTS_PROFILE]";
 static const char *TAG_GAP = "MODULE[BLUETOOTH][GAP]";
-
-#define NVS_NAMESPACE "vogon"
 
 #define PROFILE_NUM 1 // Number of profiles in total
 
@@ -36,17 +35,11 @@ static const char *TAG_GAP = "MODULE[BLUETOOTH][GAP]";
 
 static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param);
 
-static nvs_handle_t open_nvs_handle();
-static void close_nvs_handle(nvs_handle_t nvs_handle);
-static char *get_nvs_string(nvs_handle_t nvs_handle, const char *key, const char *default_value);
-static esp_err_t set_nvs_string(nvs_handle_t nvs_handle, const char *key, const char *value);
-
 // Constants
 
 static const uint16_t primary_service_uuid = ESP_GATT_UUID_PRI_SERVICE;
 static const uint16_t characteristic_declaration_uuid = ESP_GATT_UUID_CHAR_DECLARE;
 static const uint16_t characteristic_declaration_size = sizeof(uint8_t);
-static const uint16_t characteristic_description_uuid = ESP_GATT_UUID_CHAR_DESCRIPTION;
 static uint8_t characteristic_prop_read_write = ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE;
 
 // Profiles setup
@@ -60,23 +53,46 @@ static struct gatts_profile_instance {
 		.gatts_if = ESP_GATT_IF_NONE,
 	}};
 
-// CONFIGURATION service constants
+// Configuration service constants
 
 static uint8_t config_service_uuid[ESP_UUID_LEN_128] = {
 	// Configuration service uuid: d0a823a6-fa98-4597-b0c1-d8577be0e158
 	0x58, 0xE1, 0xE0, 0x7B, 0x57, 0xD8, 0xC1, 0xB0, 0x97, 0x45, 0x98, 0xFA, 0xA6, 0x23, 0xA8, 0xD0};
 
-static uint8_t config_service_val_uuid[ESP_UUID_LEN_16] = {0xff, 0x01};
-static uint8_t config_service_val_init[] = "world!";
-static const uint16_t config_service_val_len_max = 512;
+#define NUM_CHARACTERISTICS 9
+static uint16_t general_config_measurement_interval_characteristic_uuid = 0x0101;
 
-static uint8_t config_characteristic_name[] = "Hello";
+static uint16_t sensors_config_measurement_dht22_bulk_size_characteristic_uuid = 0x0201;
+static uint16_t sensors_config_measurement_dht22_bulk_sleep_characteristic_uuid = 0x0202;
+static uint16_t sensors_config_measurement_sds011_warm_up_characteristic_uuid = 0x0203;
+static uint16_t sensors_config_measurement_sds011_bulk_size_characteristic_uuid = 0x0204;
+static uint16_t sensors_config_measurement_sds011_bulk_sleep_characteristic_uuid = 0x0205;
+
+static uint16_t sync_config_wifi_ssid_characteristic_uuid = 0x0701;
+static uint16_t sync_config_wifi_password_characteristic_uuid = 0x0702;
+static uint16_t sync_config_mqtt_broker_url_characteristic_uuid = 0x0703;
 
 enum {
 	CONFIG_SERVICE_DECLARATION_IDX,
-	CONFIG_SERVICE_CHARACTERISTIC_IDX,
-	CONFIG_SERVICE_VALUE_IDX,
-	CONFIG_SERVICE_DESCRIPTION_IDX,
+
+	GENERAL_CONFIG_MEASUREMENT_INTERVAL_CHARACTERISTIC_IDX,
+	GENERAL_CONFIG_MEASUREMENT_INTERVAL_VALUE_IDX,
+	SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SIZE_CHARACTERISTIC_IDX,
+	SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SIZE_VALUE_IDX,
+	SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SLEEP_CHARACTERISTIC_IDX,
+	SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SLEEP_VALUE_IDX,
+	SENSORS_CONFIG_SDS011_WARM_UP_CHARACTERISTIC_IDX,
+	SENSORS_CONFIG_SDS011_WARM_UP_VALUE_IDX,
+	SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SIZE_CHARACTERISTIC_IDX,
+	SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SIZE_VALUE_IDX,
+	SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SLEEP_CHARACTERISTIC_IDX,
+	SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SLEEP_VALUE_IDX,
+	SYNC_CONFIG_WIFI_SSID_CHARACTERISTIC_IDX,
+	SYNC_CONFIG_WIFI_SSID_VALUE_IDX,
+	SYNC_CONFIG_WIFI_PASSWORD_CHARACTERISTIC_IDX,
+	SYNC_CONFIG_WIFI_PASSWORD_VALUE_IDX,
+	SYNC_CONFIG_MQTT_BROKER_URL_CHARACTERISTIC_IDX,
+	SYNC_CONFIG_MQTT_BROKER_URL_VALUE_IDX,
 
 	CONFIG_SERVICE_IDX_MAX
 };
@@ -156,21 +172,34 @@ static void gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param
 	}
 }
 
-// CONFIGURATION service setup
+// Configuration service setup
 
 static const esp_gatts_attr_db_t gatts_attr_db[CONFIG_SERVICE_IDX_MAX] =
 	{
 		// Configuration service declaration
 		[CONFIG_SERVICE_DECLARATION_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&primary_service_uuid, ESP_GATT_PERM_READ, ESP_UUID_LEN_128, sizeof(config_service_uuid), config_service_uuid}},
 
-		// Configuration characteristic declaration
-		[CONFIG_SERVICE_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read_write}},
+		[GENERAL_CONFIG_MEASUREMENT_INTERVAL_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read_write}},
+		[GENERAL_CONFIG_MEASUREMENT_INTERVAL_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&general_config_measurement_interval_characteristic_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, sizeof(uint8_t), 0, NULL}},
+		[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SIZE_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read_write}},
+		[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SIZE_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&sensors_config_measurement_dht22_bulk_size_characteristic_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, sizeof(uint8_t), 0, NULL}},
+		[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SLEEP_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read_write}},
+		[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SLEEP_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&sensors_config_measurement_dht22_bulk_sleep_characteristic_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, sizeof(uint8_t), 0, NULL}},
+		[SENSORS_CONFIG_SDS011_WARM_UP_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read_write}},
+		[SENSORS_CONFIG_SDS011_WARM_UP_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&sensors_config_measurement_sds011_warm_up_characteristic_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, sizeof(uint8_t), 0, NULL}},
+		[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SIZE_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read_write}},
+		[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SIZE_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&sensors_config_measurement_sds011_bulk_size_characteristic_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, sizeof(uint8_t), 0, NULL}},
+		[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SLEEP_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read_write}},
+		[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SLEEP_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&sensors_config_measurement_sds011_bulk_sleep_characteristic_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, sizeof(uint8_t), 0, NULL}},
+		[SYNC_CONFIG_WIFI_SSID_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read_write}},
+		[SYNC_CONFIG_WIFI_SSID_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&sync_config_wifi_ssid_characteristic_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, sizeof(char) * 31, 0, NULL}},
+		[SYNC_CONFIG_WIFI_PASSWORD_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read_write}},
+		[SYNC_CONFIG_WIFI_PASSWORD_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&sync_config_wifi_password_characteristic_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, sizeof(char) * 63, 0, NULL}},
+		[SYNC_CONFIG_MQTT_BROKER_URL_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read_write}},
+		[SYNC_CONFIG_MQTT_BROKER_URL_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&sync_config_mqtt_broker_url_characteristic_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, sizeof(char) * 255, 0, NULL}},
 
-		// Configuration characteristic value
-		[CONFIG_SERVICE_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&config_service_val_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, config_service_val_len_max, sizeof(config_service_val_init) - 1, config_service_val_init}},
-
-		// Configuration characteristic user description (user-readable name) descriptor
-		[CONFIG_SERVICE_DESCRIPTION_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_description_uuid, ESP_GATT_PERM_READ, sizeof(config_characteristic_name), sizeof(config_characteristic_name) - 1, config_characteristic_name}},
+		// Characteristic user description (user-readable name) descriptor
+		// [XXXXX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_description_uuid, ESP_GATT_PERM_READ, sizeof(characteristic_name), sizeof(characteristic_name) - 1, characteristic_name}},
 };
 
 static uint16_t config_service_handle_table[CONFIG_SERVICE_IDX_MAX];
@@ -244,129 +273,151 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 			ESP_LOGI(TAG_GATTS_PROFILE, "[ESP_GATTS_READ_EVT]: conn %d, trans %d, handle %d, offset %d",
 					 conn_id, trans_id, handle, offset);
 
-			nvs_handle_t nvs_handle = open_nvs_handle();
+			uint16_t characteristic_value_handles[NUM_CHARACTERISTICS] = {
+				config_service_handle_table[GENERAL_CONFIG_MEASUREMENT_INTERVAL_VALUE_IDX],
+				config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SIZE_VALUE_IDX],
+				config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SLEEP_VALUE_IDX],
+				config_service_handle_table[SENSORS_CONFIG_SDS011_WARM_UP_VALUE_IDX],
+				config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SIZE_VALUE_IDX],
+				config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SLEEP_VALUE_IDX],
+				config_service_handle_table[SYNC_CONFIG_WIFI_SSID_VALUE_IDX],
+				config_service_handle_table[SYNC_CONFIG_WIFI_PASSWORD_VALUE_IDX],
+				config_service_handle_table[SYNC_CONFIG_MQTT_BROKER_URL_VALUE_IDX],
+			};
 
-			if (nvs_handle == -1)
-				return;
-
-			if (handle == config_service_handle_table[CONFIG_SERVICE_VALUE_IDX]) {
-				char *rsp_value = get_nvs_string(
-					nvs_handle,
-					"config_value",
-					"default");
-
-				esp_gatt_rsp_t rsp;
-				memset(&rsp, 0, sizeof(esp_gatt_rsp_t));
-
-				rsp.attr_value.len = strlen(rsp_value);
-				rsp.attr_value.handle = handle;
-
-				memcpy(rsp.attr_value.value,
-					   rsp_value + offset,
-					   rsp.attr_value.len - offset);
-
-				free(rsp_value);
-
-				esp_err_t ret = esp_ble_gatts_send_response(
-					gatts_if,
-					conn_id,
-					trans_id,
-					ESP_GATT_OK,
-					&rsp);
-
-				if (ret != ESP_OK) {
-					ESP_LOGE(TAG_GATTS_PROFILE, "Send response failed, error code = %x", ret);
+			bool is_value_handle = false;
+			for (int i = 0; i < NUM_CHARACTERISTICS; i++) {
+				if (handle == characteristic_value_handles[i]) {
+					is_value_handle = true;
+					break;
 				}
 			}
 
-			nvs_close(nvs_handle);
+			if (!is_value_handle)
+				return;
+
+			esp_gatt_rsp_t rsp;
+			memset(&rsp, 0, sizeof(esp_gatt_rsp_t));
+			rsp.attr_value.handle = handle;
+
+			char *rsp_value = NULL;
+
+			if (handle == config_service_handle_table[GENERAL_CONFIG_MEASUREMENT_INTERVAL_VALUE_IDX]) {
+				rsp_value = NULL;
+				rsp.attr_value.len = 0;
+			}
+			if (handle == config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SIZE_VALUE_IDX]) {
+				rsp_value = NULL;
+				rsp.attr_value.len = 0;
+			}
+			if (handle == config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SLEEP_VALUE_IDX]) {
+				rsp_value = NULL;
+				rsp.attr_value.len = 0;
+			}
+			if (handle == config_service_handle_table[SENSORS_CONFIG_SDS011_WARM_UP_VALUE_IDX]) {
+				rsp_value = NULL;
+				rsp.attr_value.len = 0;
+			}
+			if (handle == config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SIZE_VALUE_IDX]) {
+				rsp_value = NULL;
+				rsp.attr_value.len = 0;
+			}
+			if (handle == config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SLEEP_VALUE_IDX]) {
+				rsp_value = NULL;
+				rsp.attr_value.len = 0;
+			}
+			if (handle == config_service_handle_table[SYNC_CONFIG_WIFI_SSID_VALUE_IDX]) {
+				rsp_value = vogon_nvs_get_str(NVS_KEY_SYNC_WIFI_SSID, "meheh");
+				rsp.attr_value.len = strlen(rsp_value);
+			}
+			if (handle == config_service_handle_table[SYNC_CONFIG_WIFI_PASSWORD_VALUE_IDX]) {
+				rsp_value = vogon_nvs_get_str(NVS_KEY_SYNC_WIFI_PASSWORD, "meheh");
+				rsp.attr_value.len = strlen(rsp_value);
+			}
+			if (handle == config_service_handle_table[SYNC_CONFIG_MQTT_BROKER_URL_VALUE_IDX]) {
+				rsp_value = vogon_nvs_get_str(NVS_KEY_SYNC_MQTT_BROKER_URL, "meheh");
+				rsp.attr_value.len = strlen(rsp_value);
+			}
+
+			memcpy(rsp.attr_value.value,
+				   rsp_value + offset,
+				   rsp.attr_value.len - offset);
+
+			free(rsp_value);
+
+			esp_err_t ret = esp_ble_gatts_send_response(
+				gatts_if,
+				conn_id,
+				trans_id,
+				ESP_GATT_OK,
+				&rsp);
+
+			if (ret != ESP_OK) {
+				ESP_LOGE(TAG_GATTS_PROFILE, "Send response failed, error code = %x", ret);
+			}
 
 			break;
 		}
 
 		case ESP_GATTS_WRITE_EVT: {
-			// uint16_t conn_id = param->write.conn_id;
-			// uint16_t trans_id = param->write.trans_id;
-			// uint16_t handle = param->write.handle;
-			// uint16_t len = param->write.len;
-			// const uint8_t *data = param->write.value;
-
-			// ESP_LOGI(TAG_GATTS_PROFILE, "[ESP_GATTS_WRITE_EVT]: Length %d", len);
-			// ESP_LOG_BUFFER_HEXDUMP(TAG_GATTS_PROFILE, data, len, ESP_LOG_INFO);
-
-			// esp_err_t ret;
-
-			// nvs_handle_t nvs_handle = open_nvs_handle();
-
-			// if (nvs_handle == -1)
-			//   return;
-
-			// if (param->write.is_prep) {
-			//   ret = esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_WRITE_NOT_PERMIT, NULL);
-
-			//   if (ret != ESP_OK) {
-			//     ESP_LOGE(TAG, "Forbidden is_prep rsp failed to send, error code = %x", ret);
-			//   }
-
-			//   return;
-			// }
-
-			// char *null_terminated_data = malloc(len + 1);
-
-			// if (null_terminated_data == NULL) {
-			//     ESP_LOGE(TAG_GATTS_PROFILE, "Failed to allocate memory for string");
-			//     return;
-			// }
-
-			// set_nvs_string(nvs_handle, "config_value", (const char *)data);
-			// close_nvs_handle(nvs_handle);
-
-			// esp_err_t ret = esp_ble_gatts_send_response(
-			//     gatts_if,
-			//     conn_id,
-			//     trans_id,
-			//     ESP_GATT_OK,
-			//     NULL);
-
-			// if (ret != ESP_OK) {
-			//   ESP_LOGE(TAG, "Send write resp failed, error code = %x", ret);
-			// }
-
-			// break;
-
 			uint16_t conn_id = param->write.conn_id;
 			uint16_t trans_id = param->write.trans_id;
-			// uint16_t handle = param->write.handle;
+			uint16_t handle = param->write.handle;
 			uint16_t len = param->write.len;
 			const uint8_t *data = param->write.value;
 
 			ESP_LOGI(TAG_GATTS_PROFILE, "[ESP_GATTS_WRITE_EVT]: Length %d", len);
 			ESP_LOG_BUFFER_HEXDUMP(TAG_GATTS_PROFILE, data, len, ESP_LOG_INFO);
 
-			esp_err_t ret = ESP_GATT_OK;
-			nvs_handle_t nvs_handle = open_nvs_handle();
-
-			if (nvs_handle == -1) {
-				ret = ESP_GATT_WRITE_NOT_PERMIT;
-				goto send_response;
-			}
+			esp_err_t ret;
 
 			if (param->write.is_prep) {
-				ret = ESP_GATT_WRITE_NOT_PERMIT;
-				goto cleanup_and_respond;
+				esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_WRITE_NOT_PERMIT, NULL);
 			}
 
 			char *null_terminated_data = malloc(len + 1);
+
 			if (null_terminated_data == NULL) {
-				ESP_LOGE(TAG_GATTS_PROFILE, "Failed to allocate memory for string");
-				ret = ESP_GATT_NO_RESOURCES;
-				goto cleanup_and_respond;
+				ESP_LOGE(TAG_GATTS_PROFILE, "Failed to allocate memory");
+				esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_NO_RESOURCES, NULL);
 			}
 
 			memcpy(null_terminated_data, data, len);
 			null_terminated_data[len] = '\0';
 
-			ret = set_nvs_string(nvs_handle, "config_value", null_terminated_data);
+			if (handle == config_service_handle_table[GENERAL_CONFIG_MEASUREMENT_INTERVAL_VALUE_IDX]) {
+				// ret = vogon_nvs_set_str(NVS_KEY_GENERAL_MEASUREMENT_INTERVAL, null_terminated_data);
+				ret = ESP_GATT_OK;
+			}
+			if (handle == config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SIZE_VALUE_IDX]) {
+				// ret = vogon_nvs_set_str(NVS_KEY_SENSORS_DHT22_MEASUREMENT_BULK_SIZE, null_terminated_data);
+				ret = ESP_GATT_OK;
+			}
+			if (handle == config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SLEEP_VALUE_IDX]) {
+				// ret = vogon_nvs_set_str(NVS_KEY_SENSORS_DHT22_MEASUREMENT_BULK_SLEEP, null_terminated_data);
+				ret = ESP_GATT_OK;
+			}
+			if (handle == config_service_handle_table[SENSORS_CONFIG_SDS011_WARM_UP_VALUE_IDX]) {
+				// ret = vogon_nvs_set_str(NVS_KEY_SENSORS_SDS011_WARM_UP, null_terminated_data);
+				ret = ESP_GATT_OK;
+			}
+			if (handle == config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SIZE_VALUE_IDX]) {
+				// ret = vogon_nvs_set_str(NVS_KEY_SENSORS_SDS011_MEASUREMENT_BULK_SIZE, null_terminated_data);
+				ret = ESP_GATT_OK;
+			}
+			if (handle == config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SLEEP_VALUE_IDX]) {
+				// ret = vogon_nvs_set_str(NVS_KEY_SENSORS_SDS011_MEASUREMENT_BULK_SLEEP, null_terminated_data);
+				ret = ESP_GATT_OK;
+			}
+			if (handle == config_service_handle_table[SYNC_CONFIG_WIFI_SSID_VALUE_IDX]) {
+				ret = vogon_nvs_set_str(NVS_KEY_SYNC_WIFI_SSID, null_terminated_data);
+			}
+			if (handle == config_service_handle_table[SYNC_CONFIG_WIFI_PASSWORD_VALUE_IDX]) {
+				ret = vogon_nvs_set_str(NVS_KEY_SYNC_WIFI_PASSWORD, null_terminated_data);
+			}
+			if (handle == config_service_handle_table[SYNC_CONFIG_MQTT_BROKER_URL_VALUE_IDX]) {
+				ret = vogon_nvs_set_str(NVS_KEY_SYNC_MQTT_BROKER_URL, null_terminated_data);
+			}
 
 			if (ret != ESP_OK) {
 				ESP_LOGE(TAG_GATTS_PROFILE, "Failed to write to NVS: %s", esp_err_to_name(ret));
@@ -374,17 +425,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 			}
 
 			free(null_terminated_data);
-
-		cleanup_and_respond:
-			close_nvs_handle(nvs_handle);
-
-		send_response:
-			ret = esp_ble_gatts_send_response(
-				gatts_if,
-				conn_id,
-				trans_id,
-				ret,
-				NULL);
+			ret = esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, NULL);
 
 			if (ret != ESP_OK) {
 				ESP_LOGE(TAG_GATTS_PROFILE, "Send write resp failed, error code = %x", ret);
@@ -490,71 +531,4 @@ void bluetooth_gatt_server_start() {
 	ESP_LOGI(TAG_MAIN, "Bluetooth initialized successfully");
 
 	return;
-}
-
-// ===== ===== ===== =====
-
-static nvs_handle_t open_nvs_handle() {
-	nvs_handle_t nvs_handle;
-	esp_err_t ret = nvs_open_from_partition(NVS_FLASH_APP, NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
-
-	if (ret != ESP_OK) {
-		ESP_LOGE(TAG, "Error opening NVS handle: %s", esp_err_to_name(ret));
-		return -1;
-	}
-
-	return nvs_handle;
-}
-
-static void close_nvs_handle(nvs_handle_t nvs_handle) {
-	if (nvs_handle != -1) {
-		nvs_close(nvs_handle);
-	}
-}
-
-static char *get_nvs_string(nvs_handle_t nvs_handle, const char *key, const char *default_value) {
-	size_t required_size = 0;
-	esp_err_t ret = nvs_get_str(nvs_handle, key, NULL, &required_size);
-
-	if (ret == ESP_ERR_NVS_NOT_FOUND) {
-		return strdup(default_value);
-	} else if (ret != ESP_OK) {
-		ESP_LOGE(TAG, "Failed to get string size from NVS for key '%s': %s", key, esp_err_to_name(ret));
-		return NULL;
-	}
-
-	char *value = malloc(required_size);
-
-	if (value == NULL) {
-		ESP_LOGE(TAG, "Memory allocation failed for NVS string");
-		return NULL;
-	}
-
-	ret = nvs_get_str(nvs_handle, key, value, &required_size);
-
-	if (ret != ESP_OK) {
-		ESP_LOGE(TAG, "Failed to read string from NVS for key '%s': %s", key, esp_err_to_name(ret));
-		free(value);
-		return NULL;
-	}
-
-	return value;
-}
-
-static esp_err_t set_nvs_string(nvs_handle_t nvs_handle, const char *key, const char *value) {
-	esp_err_t ret = nvs_set_str(nvs_handle, key, value);
-
-	if (ret != ESP_OK) {
-		ESP_LOGE(TAG, "Failed to write string to NVS for key '%s': %s", key, esp_err_to_name(ret));
-		return ret;
-	}
-
-	ret = nvs_commit(nvs_handle);
-
-	if (ret != ESP_OK) {
-		ESP_LOGE(TAG, "Failed to commit NVS changes: %s", esp_err_to_name(ret));
-		return ret;
-	}
-
-	return ESP_OK;
 }

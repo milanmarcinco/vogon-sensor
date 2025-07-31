@@ -6,7 +6,7 @@
 #include "freertos/semphr.h"
 
 #define DEVICE_NAME "Vogon"
-#define NVS_FLASH_APP "nvs_app"
+#define NVS_PARTITION "nvs_app"
 
 typedef struct
 {
