@@ -59,9 +59,6 @@ void app_main(void) {
 		return;
 	}
 
-	// Init TCP/IP stack
-	ESP_ERROR_CHECK(esp_netif_init());
-
 	// Initialize screen
 	SSD1306_t screen;
 	i2c_master_init(&screen, 22, 21, -1);
