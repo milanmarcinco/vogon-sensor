@@ -35,6 +35,17 @@ static const char *TAG_GAP = "MODULE[BLUETOOTH][GAP]";
 
 static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param);
 
+typedef enum {
+	TYPE_U16,
+	TYPE_STR
+} handle_type_t;
+
+typedef struct {
+	uint16_t handle;
+	const char *key;
+	handle_type_t type;
+} handle_mapping_t;
+
 // Constants
 
 static const uint16_t primary_service_uuid = ESP_GATT_UUID_PRI_SERVICE;
@@ -273,90 +284,61 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 			ESP_LOGI(TAG_GATTS_PROFILE, "[ESP_GATTS_READ_EVT]: conn %d, trans %d, handle %d, offset %d",
 					 conn_id, trans_id, handle, offset);
 
-			uint16_t characteristic_value_handles[NUM_CHARACTERISTICS] = {
-				config_service_handle_table[GENERAL_CONFIG_MEASUREMENT_INTERVAL_VALUE_IDX],
-				config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SIZE_VALUE_IDX],
-				config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SLEEP_VALUE_IDX],
-				config_service_handle_table[SENSORS_CONFIG_SDS011_WARM_UP_VALUE_IDX],
-				config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SIZE_VALUE_IDX],
-				config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SLEEP_VALUE_IDX],
-				config_service_handle_table[SYNC_CONFIG_WIFI_SSID_VALUE_IDX],
-				config_service_handle_table[SYNC_CONFIG_WIFI_PASSWORD_VALUE_IDX],
-				config_service_handle_table[SYNC_CONFIG_MQTT_BROKER_URL_VALUE_IDX],
+			handle_mapping_t mappings[] = {
+				{config_service_handle_table[GENERAL_CONFIG_MEASUREMENT_INTERVAL_VALUE_IDX], NVS_KEY_GENERAL_MEASUREMENT_INTERVAL, TYPE_U16},
+				{config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SIZE_VALUE_IDX], NVS_KEY_SENSORS_DHT22_MEASUREMENT_BULK_SIZE, TYPE_U16},
+				{config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SLEEP_VALUE_IDX], NVS_KEY_SENSORS_DHT22_MEASUREMENT_BULK_SLEEP, TYPE_U16},
+				{config_service_handle_table[SENSORS_CONFIG_SDS011_WARM_UP_VALUE_IDX], NVS_KEY_SENSORS_SDS011_WARM_UP, TYPE_U16},
+				{config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SIZE_VALUE_IDX], NVS_KEY_SENSORS_SDS011_MEASUREMENT_BULK_SIZE, TYPE_U16},
+				{config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SLEEP_VALUE_IDX], NVS_KEY_SENSORS_SDS011_MEASUREMENT_BULK_SLEEP, TYPE_U16},
+				{config_service_handle_table[SYNC_CONFIG_WIFI_SSID_VALUE_IDX], NVS_KEY_SYNC_WIFI_SSID, TYPE_STR},
+				{config_service_handle_table[SYNC_CONFIG_WIFI_PASSWORD_VALUE_IDX], NVS_KEY_SYNC_WIFI_PASSWORD, TYPE_STR},
+				{config_service_handle_table[SYNC_CONFIG_MQTT_BROKER_URL_VALUE_IDX], NVS_KEY_SYNC_MQTT_BROKER_URL, TYPE_STR},
 			};
 
-			bool is_value_handle = false;
-			for (int i = 0; i < NUM_CHARACTERISTICS; i++) {
-				if (handle == characteristic_value_handles[i]) {
-					is_value_handle = true;
-					break;
+			for (size_t i = 0; i < sizeof(mappings) / sizeof(mappings[0]); i++) {
+				if (handle == mappings[i].handle) {
+					esp_gatt_rsp_t rsp;
+					memset(&rsp, 0, sizeof(rsp));
+
+					rsp.attr_value.handle = handle;
+
+					uint8_t *data = NULL;
+					size_t len = 0;
+
+					if (mappings[i].type == TYPE_U16) {
+						uint16_t *u16_val = malloc(sizeof(uint16_t));
+
+						if (u16_val == NULL) {
+							ESP_LOGE(TAG_GATTS_PROFILE, "Failed to allocate memory");
+							return;
+						}
+
+						*u16_val = vogon_nvs_get_u16(mappings[i].key, 123);
+						data = (uint8_t *)u16_val;
+						len = sizeof(uint16_t);
+					} else {
+						char *str_val = vogon_nvs_get_str(mappings[i].key, "meheh");
+						data = (uint8_t *)str_val;
+						len = strlen(str_val);
+					}
+
+					if (offset < len) {
+						len -= offset;
+						memcpy(rsp.attr_value.value, data + offset, len);
+					} else {
+						len = 0;
+					}
+
+					rsp.attr_value.len = len;
+					esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, &rsp);
+					free(data);
+
+					return;
 				}
 			}
 
-			if (!is_value_handle)
-				return;
-
-			esp_gatt_rsp_t rsp;
-			memset(&rsp, 0, sizeof(esp_gatt_rsp_t));
-			rsp.attr_value.handle = handle;
-
-			char *rsp_value = NULL;
-
-			if (handle == config_service_handle_table[GENERAL_CONFIG_MEASUREMENT_INTERVAL_VALUE_IDX]) {
-				rsp_value = NULL;
-				rsp.attr_value.len = 0;
-			}
-			if (handle == config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SIZE_VALUE_IDX]) {
-				rsp_value = NULL;
-				rsp.attr_value.len = 0;
-			}
-			if (handle == config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SLEEP_VALUE_IDX]) {
-				rsp_value = NULL;
-				rsp.attr_value.len = 0;
-			}
-			if (handle == config_service_handle_table[SENSORS_CONFIG_SDS011_WARM_UP_VALUE_IDX]) {
-				rsp_value = NULL;
-				rsp.attr_value.len = 0;
-			}
-			if (handle == config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SIZE_VALUE_IDX]) {
-				rsp_value = NULL;
-				rsp.attr_value.len = 0;
-			}
-			if (handle == config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SLEEP_VALUE_IDX]) {
-				rsp_value = NULL;
-				rsp.attr_value.len = 0;
-			}
-			if (handle == config_service_handle_table[SYNC_CONFIG_WIFI_SSID_VALUE_IDX]) {
-				rsp_value = vogon_nvs_get_str(NVS_KEY_SYNC_WIFI_SSID, "meheh");
-				rsp.attr_value.len = strlen(rsp_value);
-			}
-			if (handle == config_service_handle_table[SYNC_CONFIG_WIFI_PASSWORD_VALUE_IDX]) {
-				rsp_value = vogon_nvs_get_str(NVS_KEY_SYNC_WIFI_PASSWORD, "meheh");
-				rsp.attr_value.len = strlen(rsp_value);
-			}
-			if (handle == config_service_handle_table[SYNC_CONFIG_MQTT_BROKER_URL_VALUE_IDX]) {
-				rsp_value = vogon_nvs_get_str(NVS_KEY_SYNC_MQTT_BROKER_URL, "meheh");
-				rsp.attr_value.len = strlen(rsp_value);
-			}
-
-			memcpy(rsp.attr_value.value,
-				   rsp_value + offset,
-				   rsp.attr_value.len - offset);
-
-			free(rsp_value);
-
-			esp_err_t ret = esp_ble_gatts_send_response(
-				gatts_if,
-				conn_id,
-				trans_id,
-				ESP_GATT_OK,
-				&rsp);
-
-			if (ret != ESP_OK) {
-				ESP_LOGE(TAG_GATTS_PROFILE, "Send response failed, error code = %x", ret);
-			}
-
-			break;
+			return;
 		}
 
 		case ESP_GATTS_WRITE_EVT: {
@@ -373,64 +355,70 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 
 			if (param->write.is_prep) {
 				esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_WRITE_NOT_PERMIT, NULL);
+				return;
 			}
 
-			char *null_terminated_data = malloc(len + 1);
+			handle_mapping_t mappings[] = {
+				{config_service_handle_table[GENERAL_CONFIG_MEASUREMENT_INTERVAL_VALUE_IDX], NVS_KEY_GENERAL_MEASUREMENT_INTERVAL, TYPE_U16},
+				{config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SIZE_VALUE_IDX], NVS_KEY_SENSORS_DHT22_MEASUREMENT_BULK_SIZE, TYPE_U16},
+				{config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SLEEP_VALUE_IDX], NVS_KEY_SENSORS_DHT22_MEASUREMENT_BULK_SLEEP, TYPE_U16},
+				{config_service_handle_table[SENSORS_CONFIG_SDS011_WARM_UP_VALUE_IDX], NVS_KEY_SENSORS_SDS011_WARM_UP, TYPE_U16},
+				{config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SIZE_VALUE_IDX], NVS_KEY_SENSORS_SDS011_MEASUREMENT_BULK_SIZE, TYPE_U16},
+				{config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SLEEP_VALUE_IDX], NVS_KEY_SENSORS_SDS011_MEASUREMENT_BULK_SLEEP, TYPE_U16},
+				{config_service_handle_table[SYNC_CONFIG_WIFI_SSID_VALUE_IDX], NVS_KEY_SYNC_WIFI_SSID, TYPE_STR},
+				{config_service_handle_table[SYNC_CONFIG_WIFI_PASSWORD_VALUE_IDX], NVS_KEY_SYNC_WIFI_PASSWORD, TYPE_STR},
+				{config_service_handle_table[SYNC_CONFIG_MQTT_BROKER_URL_VALUE_IDX], NVS_KEY_SYNC_MQTT_BROKER_URL, TYPE_STR},
+			};
 
-			if (null_terminated_data == NULL) {
-				ESP_LOGE(TAG_GATTS_PROFILE, "Failed to allocate memory");
-				esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_NO_RESOURCES, NULL);
+			for (size_t i = 0; i < sizeof(mappings) / sizeof(mappings[0]); i++) {
+				if (handle == mappings[i].handle) {
+					if (mappings[i].type == TYPE_U16) {
+						if (len != sizeof(uint16_t)) {
+							ESP_LOGE(TAG_GATTS_PROFILE, "Invalid data length for u16 value: %d", len);
+							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_WRITE_NOT_PERMIT, NULL);
+							return;
+						}
+
+						uint16_t value;
+						memcpy(&value, data, sizeof(uint16_t));
+						ret = vogon_nvs_set_u16(mappings[i].key, value);
+
+						if (ret != ESP_OK) {
+							ESP_LOGE(TAG_GATTS_PROFILE, "Failed to write to NVS: %s", esp_err_to_name(ret));
+							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_WRITE_NOT_PERMIT, NULL);
+							return;
+						}
+
+						esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, NULL);
+						return;
+					} else if (mappings[i].type == TYPE_STR) {
+						char null_terminated_data[256];
+
+						if (len >= sizeof(null_terminated_data)) {
+							ESP_LOGE(TAG_GATTS_PROFILE, "String data too long");
+							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_WRITE_NOT_PERMIT, NULL);
+							return;
+						}
+
+						memcpy(null_terminated_data, data, len);
+						null_terminated_data[len] = '\0';
+
+						ret = vogon_nvs_set_str(mappings[i].key, null_terminated_data);
+
+						if (ret != ESP_OK) {
+							ESP_LOGE(TAG_GATTS_PROFILE, "Failed to write to NVS: %s", esp_err_to_name(ret));
+							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_WRITE_NOT_PERMIT, NULL);
+							return;
+						}
+
+						esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, NULL);
+						return;
+					}
+				}
 			}
 
-			memcpy(null_terminated_data, data, len);
-			null_terminated_data[len] = '\0';
-
-			if (handle == config_service_handle_table[GENERAL_CONFIG_MEASUREMENT_INTERVAL_VALUE_IDX]) {
-				// ret = vogon_nvs_set_str(NVS_KEY_GENERAL_MEASUREMENT_INTERVAL, null_terminated_data);
-				ret = ESP_GATT_OK;
-			}
-			if (handle == config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SIZE_VALUE_IDX]) {
-				// ret = vogon_nvs_set_str(NVS_KEY_SENSORS_DHT22_MEASUREMENT_BULK_SIZE, null_terminated_data);
-				ret = ESP_GATT_OK;
-			}
-			if (handle == config_service_handle_table[SENSORS_CONFIG_DHT22_MEASUREMENT_BULK_SLEEP_VALUE_IDX]) {
-				// ret = vogon_nvs_set_str(NVS_KEY_SENSORS_DHT22_MEASUREMENT_BULK_SLEEP, null_terminated_data);
-				ret = ESP_GATT_OK;
-			}
-			if (handle == config_service_handle_table[SENSORS_CONFIG_SDS011_WARM_UP_VALUE_IDX]) {
-				// ret = vogon_nvs_set_str(NVS_KEY_SENSORS_SDS011_WARM_UP, null_terminated_data);
-				ret = ESP_GATT_OK;
-			}
-			if (handle == config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SIZE_VALUE_IDX]) {
-				// ret = vogon_nvs_set_str(NVS_KEY_SENSORS_SDS011_MEASUREMENT_BULK_SIZE, null_terminated_data);
-				ret = ESP_GATT_OK;
-			}
-			if (handle == config_service_handle_table[SENSORS_CONFIG_SDS011_MEASUREMENT_BULK_SLEEP_VALUE_IDX]) {
-				// ret = vogon_nvs_set_str(NVS_KEY_SENSORS_SDS011_MEASUREMENT_BULK_SLEEP, null_terminated_data);
-				ret = ESP_GATT_OK;
-			}
-			if (handle == config_service_handle_table[SYNC_CONFIG_WIFI_SSID_VALUE_IDX]) {
-				ret = vogon_nvs_set_str(NVS_KEY_SYNC_WIFI_SSID, null_terminated_data);
-			}
-			if (handle == config_service_handle_table[SYNC_CONFIG_WIFI_PASSWORD_VALUE_IDX]) {
-				ret = vogon_nvs_set_str(NVS_KEY_SYNC_WIFI_PASSWORD, null_terminated_data);
-			}
-			if (handle == config_service_handle_table[SYNC_CONFIG_MQTT_BROKER_URL_VALUE_IDX]) {
-				ret = vogon_nvs_set_str(NVS_KEY_SYNC_MQTT_BROKER_URL, null_terminated_data);
-			}
-
-			if (ret != ESP_OK) {
-				ESP_LOGE(TAG_GATTS_PROFILE, "Failed to write to NVS: %s", esp_err_to_name(ret));
-				ret = ESP_GATT_WRITE_NOT_PERMIT;
-			}
-
-			free(null_terminated_data);
-			ret = esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, NULL);
-
-			if (ret != ESP_OK) {
-				ESP_LOGE(TAG_GATTS_PROFILE, "Send write resp failed, error code = %x", ret);
-			}
-
+			ESP_LOGE(TAG_GATTS_PROFILE, "Unhandled write event for handle %d", handle);
+			esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_WRITE_NOT_PERMIT, NULL);
 			break;
 		}
 
