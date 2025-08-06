@@ -9,7 +9,7 @@
 
 #include "ssd1306.h"
 
-#include "bluetooth.h"
+#include "ble_config.h"
 #include "helpers.h"
 #include "sensors.h"
 #include "shared.h"
@@ -55,7 +55,7 @@ void app_main(void) {
 
 	if (wakeup_cause == ESP_SLEEP_WAKEUP_EXT0) {
 		ESP_LOGI(TAG, "Woke up from BOOT button press - starting Bluetooth configuration mode");
-		bluetooth_gatt_server_start();
+		ble_config_gatt_server_start();
 		return;
 	}
 

@@ -2,7 +2,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-#include "nvs_app.h"
+#include "vogon_nvs.h"
 
 #include "shared.h"
 
