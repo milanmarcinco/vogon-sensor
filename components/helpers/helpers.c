@@ -2,8 +2,6 @@
 #include "stdint.h"
 #include "stdio.h"
 
-#include "esp_wifi.h"
-
 #define MAC_LEN 18
 
 char *dynamic_format(const char *fmt, ...) {

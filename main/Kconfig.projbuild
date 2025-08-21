@@ -1,5 +1,0 @@
-menu "Vogon configuration"
-    config VOGON_MEASUREMENT_INTERVAL
-        int "VOGON: Sleep time (minutes) between measurements"
-        default 10
-endmenu

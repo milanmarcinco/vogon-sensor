@@ -135,7 +135,7 @@ void sds011_task() {
 
 	ESP_LOGI(TAG, "Waking up SDS011");
 	sds011_write_state(data, WORK_STATE);
-	vTaskDelay(pdMS_TO_TICKS(CONFIG_SENSORS_SDS011_WARM_UP * 1000));
+	vTaskDelay(pdMS_TO_TICKS(shared_config.SENSORS_SDS011_WARM_UP * 1000));
 
 	if (sds011_read_reporting_mode(data, &reporting_mode) != ESP_OK) {
 		ESP_LOGE(TAG, "Unable to read SDS011 reporting mode! Commiting suicide...");
@@ -154,25 +154,25 @@ void sds011_task() {
 	uint16_t pm25_total = 0;
 	uint16_t pm10_total = 0;
 
-	for (int i = 0; i < CONFIG_SENSORS_SDS011_MEASUREMENT_BULK_SIZE; i++) {
+	for (int i = 0; i < shared_config.SENSORS_SDS011_MEASUREMENT_BULK_SIZE; i++) {
 		uint16_t pm25 = 0;
 		uint16_t pm10 = 0;
 
-		ESP_LOGI(TAG, "Measuring [%d/%d]", i + 1, CONFIG_SENSORS_SDS011_MEASUREMENT_BULK_SIZE);
+		ESP_LOGI(TAG, "Measuring [%d/%d]", i + 1, shared_config.SENSORS_SDS011_MEASUREMENT_BULK_SIZE);
 		sds011_query_data(data, &pm25, &pm10);
 
 		ESP_LOGI(TAG, "Measured [%d/%d]: PM2.5=%d, PM10=%d",
-				 i + 1, CONFIG_SENSORS_SDS011_MEASUREMENT_BULK_SIZE,
+				 i + 1, shared_config.SENSORS_SDS011_MEASUREMENT_BULK_SIZE,
 				 pm25, pm10);
 
 		pm25_total += pm25;
 		pm10_total += pm10;
 
-		vTaskDelay(pdMS_TO_TICKS(CONFIG_SENSORS_SDS011_MEASUREMENT_BULK_SLEEP * 1000));
+		vTaskDelay(pdMS_TO_TICKS(shared_config.SENSORS_SDS011_MEASUREMENT_BULK_SLEEP * 1000));
 	}
 
-	uint16_t pm25 = pm25_total / CONFIG_SENSORS_SDS011_MEASUREMENT_BULK_SIZE;
-	uint16_t pm10 = pm10_total / CONFIG_SENSORS_SDS011_MEASUREMENT_BULK_SIZE;
+	uint16_t pm25 = pm25_total / shared_config.SENSORS_SDS011_MEASUREMENT_BULK_SIZE;
+	uint16_t pm10 = pm10_total / shared_config.SENSORS_SDS011_MEASUREMENT_BULK_SIZE;
 
 	ESP_LOGI(TAG, "Final measurements: PM2.5=%d, PM10=%d", pm25, pm10);
 

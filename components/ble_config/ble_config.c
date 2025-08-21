@@ -15,13 +15,12 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
-#include "internal/led.h"
 #include "ble_config.h"
+#include "internal/led.h"
 
-#include "vogon_nvs.h"
 #include "shared.h"
 
-static const char *TAG = "MODULE[BLUETOOTH]";
+// static const char *TAG = "MODULE[BLUETOOTH]";
 static const char *TAG_MAIN = "MODULE[BLUETOOTH][MAIN]";
 static const char *TAG_GATTS = "MODULE[BLUETOOTH][GATTS]";
 static const char *TAG_GATTS_PROFILE = "MODULE[BLUETOOTH][GATTS_PROFILE]";
@@ -297,49 +296,105 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 				{config_service_handle_table[SYNC_CONFIG_MQTT_BROKER_URL_VALUE_IDX], NVS_KEY_SYNC_MQTT_BROKER_URL, TYPE_STR},
 			};
 
-			for (size_t i = 0; i < sizeof(mappings) / sizeof(mappings[0]); i++) {
-				if (handle == mappings[i].handle) {
-					esp_gatt_rsp_t rsp;
-					memset(&rsp, 0, sizeof(rsp));
+			for (size_t i = 0; i < sizeof(mappings) / sizeof(handle_mapping_t); i++) {
+				handle_mapping_t *mapping = &mappings[i];
+				if (handle != mapping->handle) continue;
 
-					rsp.attr_value.handle = handle;
+				esp_gatt_rsp_t rsp;
+				memset(&rsp, 0, sizeof(rsp));
+				rsp.attr_value.handle = handle;
 
-					uint8_t *data = NULL;
-					size_t len = 0;
+				uint8_t *data = NULL;
+				size_t len = 0;
 
-					if (mappings[i].type == TYPE_U16) {
-						uint16_t *u16_val = malloc(sizeof(uint16_t));
+				nvs_handle_t nvs_handle;
+				esp_err_t ret = nvs_open_from_partition(NVS_PARTITION, NVS_NAMESPACE, NVS_READONLY, &nvs_handle);
 
-						if (u16_val == NULL) {
-							ESP_LOGE(TAG_GATTS_PROFILE, "Failed to allocate memory");
+				if (ret != ESP_OK) {
+					ESP_LOGE(TAG_GATTS_PROFILE, "Error opening NVS handle: %s", esp_err_to_name(ret));
+					esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_INTERNAL_ERROR, NULL);
+					return;
+				}
+
+				switch (mapping->type) {
+					case TYPE_U16: {
+						uint16_t *value = malloc(sizeof(uint16_t));
+						ret = nvs_get_u16(nvs_handle, mapping->key, value);
+
+						if (ret == ESP_ERR_NVS_NOT_FOUND) {
+							free(value);
+
+							data = NULL;
+							len = 0;
+
+							goto send_response;
+						} else if (ret != ESP_OK) {
+							ESP_LOGE(TAG_GATTS_PROFILE, "Failed to read from NVS: %s", esp_err_to_name(ret));
+							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_INTERNAL_ERROR, NULL);
 							return;
 						}
 
-						*u16_val = vogon_nvs_get_u16(mappings[i].key, 123);
-						data = (uint8_t *)u16_val;
+						data = (uint8_t *)value;
 						len = sizeof(uint16_t);
-					} else {
-						char *str_val = vogon_nvs_get_str(mappings[i].key, "meheh");
-						data = (uint8_t *)str_val;
-						len = strlen(str_val);
+
+						break;
 					}
 
-					if (offset < len) {
-						len -= offset;
-						memcpy(rsp.attr_value.value, data + offset, len);
-					} else {
-						len = 0;
+					case TYPE_STR: {
+						size_t required_size = 0;
+						ret = nvs_get_str(nvs_handle, mapping->key, NULL, &required_size);
+
+						if (ret == ESP_ERR_NVS_NOT_FOUND) {
+							data = NULL;
+							len = 0;
+
+							goto send_response;
+
+							break;
+						} else if (ret != ESP_OK) {
+							ESP_LOGE(TAG_GATTS_PROFILE, "Failed to read from NVS: %s", esp_err_to_name(ret));
+							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_INTERNAL_ERROR, NULL);
+							return;
+						}
+
+						char *value = malloc(required_size);
+						if (value == NULL) {
+							ESP_LOGE(TAG_GATTS_PROFILE, "Failed to allocate memory");
+							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_INTERNAL_ERROR, NULL);
+							return;
+						};
+
+						ret = nvs_get_str(nvs_handle, mapping->key, value, &required_size);
+						if (ret != ESP_OK) {
+							ESP_LOGE(TAG_GATTS_PROFILE, "Failed to read from NVS: %s", esp_err_to_name(ret));
+							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_INTERNAL_ERROR, NULL);
+							return;
+						}
+
+						data = (uint8_t *)value;
+						len = required_size - 1;
+
+						break;
 					}
-
-					rsp.attr_value.len = len;
-					esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, &rsp);
-					free(data);
-
-					return;
 				}
+
+			send_response:
+				nvs_close(nvs_handle);
+
+				if (offset < len) {
+					len -= offset;
+					memcpy(rsp.attr_value.value, data + offset, len);
+				} else
+					len = 0;
+
+				rsp.attr_value.len = len;
+				esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, &rsp);
+				free(data);
+
+				return;
 			}
 
-			return;
+			break;
 		}
 
 		case ESP_GATTS_WRITE_EVT: {
@@ -372,8 +427,20 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 			};
 
 			for (size_t i = 0; i < sizeof(mappings) / sizeof(mappings[0]); i++) {
-				if (handle == mappings[i].handle) {
-					if (mappings[i].type == TYPE_U16) {
+				handle_mapping_t *mapping = &mappings[i];
+				if (handle != mapping->handle) continue;
+
+				nvs_handle_t nvs_handle;
+				ret = nvs_open_from_partition(NVS_PARTITION, NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
+
+				if (ret != ESP_OK) {
+					ESP_LOGE(TAG_GATTS_PROFILE, "Error opening NVS handle: %s", esp_err_to_name(ret));
+					esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_INTERNAL_ERROR, NULL);
+					return;
+				}
+
+				switch (mapping->type) {
+					case TYPE_U16: {
 						if (len != sizeof(uint16_t)) {
 							ESP_LOGE(TAG_GATTS_PROFILE, "Invalid data length for u16 value: %d", len);
 							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_WRITE_NOT_PERMIT, NULL);
@@ -382,17 +449,20 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 
 						uint16_t value;
 						memcpy(&value, data, sizeof(uint16_t));
-						ret = vogon_nvs_set_u16(mappings[i].key, value);
+						ret = nvs_set_u16(nvs_handle, mapping->key, value);
+						ret |= nvs_commit(nvs_handle);
 
 						if (ret != ESP_OK) {
 							ESP_LOGE(TAG_GATTS_PROFILE, "Failed to write to NVS: %s", esp_err_to_name(ret));
-							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_WRITE_NOT_PERMIT, NULL);
+							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_INTERNAL_ERROR, NULL);
 							return;
 						}
 
 						esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, NULL);
 						return;
-					} else if (mappings[i].type == TYPE_STR) {
+					}
+
+					case TYPE_STR: {
 						char null_terminated_data[256];
 
 						if (len >= sizeof(null_terminated_data)) {
@@ -404,11 +474,12 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 						memcpy(null_terminated_data, data, len);
 						null_terminated_data[len] = '\0';
 
-						ret = vogon_nvs_set_str(mappings[i].key, null_terminated_data);
+						ret = nvs_set_str(nvs_handle, mapping->key, null_terminated_data);
+						ret |= nvs_commit(nvs_handle);
 
 						if (ret != ESP_OK) {
 							ESP_LOGE(TAG_GATTS_PROFILE, "Failed to write to NVS: %s", esp_err_to_name(ret));
-							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_WRITE_NOT_PERMIT, NULL);
+							esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_INTERNAL_ERROR, NULL);
 							return;
 						}
 

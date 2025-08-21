@@ -60,6 +60,10 @@ void app_main(void) {
 	// Initialize semaphore to number of concurrent tasks
 	sync_mutex = xSemaphoreCreateCounting(TASK_COUNT, 0);
 
+	// Load configuration from NVS
+	ESP_ERROR_CHECK(load_shared_config());
+
+	// Initialize shared data
 	shared_data.temperature = 0;
 	shared_data.humidity = 0,
 	shared_data.pm25 = 0;
@@ -108,5 +112,5 @@ void app_main(void) {
 	rtc_gpio_pulldown_en(WAKE_GPIO); // Have GPIO pin default to LOW
 	esp_sleep_enable_ext0_wakeup(WAKE_GPIO, 0);
 	rtc_gpio_hold_en(WAKE_GPIO); // Freeze GPIO configuration
-	esp_deep_sleep(CONFIG_VOGON_MEASUREMENT_INTERVAL * 60 * 1000000);
+	esp_deep_sleep(shared_config.GENERAL_MEASUREMENT_INTERVAL * 60 * 1000000);
 }
