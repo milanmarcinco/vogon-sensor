@@ -57,11 +57,16 @@ void app_main(void) {
 		return;
 	}
 
+	// Load configuration from NVS
+	ret = load_shared_config();
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Vogon not yet configured. Entering Bluetooth configuration mode.");
+		ble_config_gatt_server_start();
+		return;
+	}
+
 	// Initialize semaphore to number of concurrent tasks
 	sync_mutex = xSemaphoreCreateCounting(TASK_COUNT, 0);
-
-	// Load configuration from NVS
-	ESP_ERROR_CHECK(load_shared_config());
 
 	// Initialize shared data
 	shared_data.temperature = 0;
@@ -104,10 +109,7 @@ void app_main(void) {
 	ESP_LOGI(TAG, "Sending data to MQTT broker...");
 	mqtt_sync();
 
-	vTaskDelay(pdMS_TO_TICKS(10000));
-
 	ESP_LOGI(TAG, "Going to sleep for 10 minutes...");
-
 	rtc_gpio_pullup_dis(WAKE_GPIO);	 // Make sure pull-up is off
 	rtc_gpio_pulldown_en(WAKE_GPIO); // Have GPIO pin default to LOW
 	esp_sleep_enable_ext0_wakeup(WAKE_GPIO, 0);
