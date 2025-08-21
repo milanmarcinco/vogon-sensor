@@ -7,8 +7,6 @@
 #include "freertos/FreeRTOS.h"
 #include "nvs_flash.h"
 
-#include "ssd1306.h"
-
 #include "ble_config.h"
 #include "helpers.h"
 #include "sensors.h"
@@ -59,13 +57,6 @@ void app_main(void) {
 		return;
 	}
 
-	// Initialize screen
-	SSD1306_t screen;
-	i2c_master_init(&screen, 22, 21, -1);
-	ssd1306_init(&screen, 128, 64);
-	ssd1306_contrast(&screen, 0xff);
-	ssd1306_clear_screen(&screen, false);
-
 	// Initialize semaphore to number of concurrent tasks
 	sync_mutex = xSemaphoreCreateCounting(TASK_COUNT, 0);
 
@@ -105,28 +96,6 @@ void app_main(void) {
 			ESP_LOGE(TAG, "Failed to take semaphore!");
 		}
 	}
-
-	// Print to screen
-	char *temp_str = dynamic_format("Tmp: %.2f C", shared_data.temperature);
-	char *humid_str = dynamic_format("Hum: %.2f %%", shared_data.humidity);
-	char *pm25_str = dynamic_format("PM25: %d ug/m3", shared_data.pm25);
-	char *pm10_str = dynamic_format("PM10: %d ug/m3", shared_data.pm10);
-
-	int temp_str_len = strlen(temp_str);
-	int humid_str_len = strlen(humid_str);
-	int pm25_str_len = strlen(pm25_str);
-	int pm10_str_len = strlen(pm10_str);
-
-	ssd1306_display_text(&screen, 0, "Air quality:", 12, false);
-	ssd1306_display_text(&screen, 1, temp_str, temp_str_len, false);
-	ssd1306_display_text(&screen, 2, humid_str, humid_str_len, false);
-	ssd1306_display_text(&screen, 3, pm25_str, pm25_str_len, false);
-	ssd1306_display_text(&screen, 4, pm10_str, pm10_str_len, false);
-
-	free(temp_str);
-	free(humid_str);
-	free(pm25_str);
-	free(pm10_str);
 
 	ESP_LOGI(TAG, "Sending data to MQTT broker...");
 	mqtt_sync();
