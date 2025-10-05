@@ -1,5 +1,6 @@
 #include "stdio.h"
 
+#include "driver/gpio.h"
 #include "driver/rtc_io.h"
 #include "esp_log.h"
 #include "esp_netif.h"
@@ -18,7 +19,7 @@ static const char *TAG = "MODULE[MAIN]";
 // Number of concurrent tasks running measurements to wait for before MQTT sync
 #define TASK_COUNT 2
 
-#define WAKE_GPIO GPIO_NUM_0
+#define BLE_CONFIG_TRIGGER_GPIO GPIO_NUM_0
 
 void app_main(void) {
 	ESP_LOGI(TAG, "Booting Vogon...");
@@ -44,9 +45,9 @@ void app_main(void) {
 	esp_reset_reason_t reset_reason = esp_reset_reason();
 	esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
 
-	rtc_gpio_hold_dis(WAKE_GPIO);	  // Allow GPIO pin reconfiguration
-	rtc_gpio_pullup_dis(WAKE_GPIO);	  // Clear any previous pull-ups
-	rtc_gpio_pulldown_dis(WAKE_GPIO); // Clear any previous pull-downs
+	rtc_gpio_hold_dis(BLE_CONFIG_TRIGGER_GPIO);		// Allow GPIO pin reconfiguration
+	rtc_gpio_pullup_dis(BLE_CONFIG_TRIGGER_GPIO);	// Clear any previous pull-ups
+	rtc_gpio_pulldown_dis(BLE_CONFIG_TRIGGER_GPIO); // Clear any previous pull-downs
 
 	ESP_LOGI(TAG, "Reset reason: %d", reset_reason);
 	ESP_LOGI(TAG, "Wakeup cause: %d", wakeup_cause);
@@ -65,7 +66,32 @@ void app_main(void) {
 		return;
 	}
 
-	// Initialize semaphore to number of concurrent tasks
+	// Start BLE configuration server on EN button press (START_BLE_CONFIG_GPIO)
+	gpio_evt_queue = xQueueCreate(1, sizeof(int));
+
+	xTaskCreatePinnedToCore(
+		ble_config_gat_server_trigger_task,
+		"gpio_task",
+		configMINIMAL_STACK_SIZE * 8,
+		NULL,
+		10,
+		NULL,
+		APP_CPU_NUM);
+
+	gpio_config_t io_conf = {
+		.intr_type = GPIO_INTR_POSEDGE,
+		.mode = GPIO_MODE_INPUT,
+		.pin_bit_mask = (1ULL << BLE_CONFIG_TRIGGER_GPIO),
+		.pull_down_en = GPIO_PULLDOWN_ENABLE};
+
+	ESP_ERROR_CHECK(gpio_config(&io_conf));
+	ESP_ERROR_CHECK(gpio_install_isr_service(0));
+	ESP_ERROR_CHECK(gpio_isr_handler_add(
+		BLE_CONFIG_TRIGGER_GPIO,
+		gpio_isr_handler,
+		(void *)BLE_CONFIG_TRIGGER_GPIO));
+
+	// Initialize sync semaphore to number of concurrent tasks
 	sync_mutex = xSemaphoreCreateCounting(TASK_COUNT, 0);
 
 	// Initialize shared data
@@ -110,9 +136,9 @@ void app_main(void) {
 	mqtt_sync();
 
 	ESP_LOGI(TAG, "Going to sleep for 10 minutes...");
-	rtc_gpio_pullup_dis(WAKE_GPIO);	 // Make sure pull-up is off
-	rtc_gpio_pulldown_en(WAKE_GPIO); // Have GPIO pin default to LOW
-	esp_sleep_enable_ext0_wakeup(WAKE_GPIO, 0);
-	rtc_gpio_hold_en(WAKE_GPIO); // Freeze GPIO configuration
+	rtc_gpio_pullup_dis(BLE_CONFIG_TRIGGER_GPIO);  // Make sure pull-up is off
+	rtc_gpio_pulldown_en(BLE_CONFIG_TRIGGER_GPIO); // Have GPIO pin default to LOW
+	esp_sleep_enable_ext0_wakeup(BLE_CONFIG_TRIGGER_GPIO, 0);
+	rtc_gpio_hold_en(BLE_CONFIG_TRIGGER_GPIO); // Freeze GPIO configuration
 	esp_deep_sleep(shared_config.GENERAL_MEASUREMENT_INTERVAL * 60 * 1000000);
 }

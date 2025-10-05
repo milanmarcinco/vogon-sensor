@@ -12,6 +12,7 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 
@@ -591,4 +592,21 @@ void ble_config_gatt_server_start() {
 	ESP_LOGI(TAG_MAIN, "Bluetooth initialized successfully");
 
 	return;
+}
+
+QueueHandle_t gpio_evt_queue;
+
+void IRAM_ATTR gpio_isr_handler(void *arg) {
+	int pin = (int)arg;
+	xQueueSendFromISR(gpio_evt_queue, &pin, NULL);
+}
+
+void ble_config_gat_server_trigger_task() {
+	int pin;
+
+	while (true) {
+		if (xQueueReceive(gpio_evt_queue, &pin, portMAX_DELAY)) {
+			ble_config_gatt_server_start();
+		}
+	}
 }
