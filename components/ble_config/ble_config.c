@@ -21,11 +21,11 @@
 
 #include "shared.h"
 
-// static const char *TAG = "MODULE[BLUETOOTH]";
-static const char *TAG_MAIN = "MODULE[BLUETOOTH][MAIN]";
-static const char *TAG_GATTS = "MODULE[BLUETOOTH][GATTS]";
-static const char *TAG_GATTS_PROFILE = "MODULE[BLUETOOTH][GATTS_PROFILE]";
-static const char *TAG_GAP = "MODULE[BLUETOOTH][GAP]";
+// static const char *TAG = "MODULE[bluetooth]";
+static const char *TAG_MAIN = "MODULE[bluetooth][main]";
+static const char *TAG_GATTS = "MODULE[bluetooth][gatts]";
+static const char *TAG_GATTS_PROFILE = "MODULE[bluetooth][gatts_profile]";
+static const char *TAG_GAP = "MODULE[bluetooth][gap]";
 
 #define PROFILE_NUM 1 // Number of profiles in total
 

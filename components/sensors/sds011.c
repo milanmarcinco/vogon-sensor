@@ -13,7 +13,7 @@
 #define RXD_PIN (GPIO_NUM_16) // Use GPIO16 for RX
 #define UART_BUFFER (1024)
 
-static const char *TAG = "MODULE[SDS011]";
+static const char *TAG = "MODULE[sds011]";
 
 static const uint8_t ACTIVE_MODE = 0x00;
 static const uint8_t QUERY_MODE = 0x01;

@@ -10,21 +10,27 @@
 #include "mqtt_client.h"
 #include "sdkconfig.h"
 
+#include "helpers.h"
 #include "shared.h"
+
 #include "sync.h"
 
 #define MAC_LEN 18
 #define TOPIC_LEN 100
 
-#define MAX_CONCURRENT_MQTT_MESSAGES 1
+#define MQTT_CONNECTION_TIMEOUT 60 * 1000
+#define MQTT_CONCURRENT_MESSAGES 4
+#define MQTT_MESSAGE_TIMEOUT_MS 10 * 1000
+#define MQTT_MESSAGE_WAIT_TIME_MS 15 * 1000
 
-static const char *TAG = "MODULE[SYNC]";
+static const char *TAG = "MODULE[sync]";
 
-static EventGroupHandle_t connection_event_group;
+static EventGroupHandle_t mqtt_connection_event_group;
 static SemaphoreHandle_t mqtt_publish_mutex;
 
-static const int WIFI_CONNECTED_BIT = BIT0;
-static const int MQTT_CONNECTED_BIT = BIT1;
+static const int MQTT_CONNECTED_BIT = BIT0;
+
+#define LEN_AUTO 0
 
 enum {
 	AT_MOST_ONCE,
@@ -37,54 +43,28 @@ enum {
 	RETAIN
 };
 
-static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
-	if (event_base == WIFI_EVENT) {
-		switch (event_id) {
-			case WIFI_EVENT_STA_START:
-				ESP_LOGI(TAG, "WIFI_EVENT_STA_START");
-				esp_wifi_connect();
-				break;
-			case WIFI_EVENT_STA_DISCONNECTED:
-				ESP_LOGI(TAG, "WIFI_EVENT_STA_DISCONNECTED");
-				xEventGroupClearBits(connection_event_group, WIFI_CONNECTED_BIT);
-				break;
-			default:
-				break;
-		}
-	}
-}
-
-static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
-	if (event_base == IP_EVENT) {
-		switch (event_id) {
-			case IP_EVENT_STA_GOT_IP:
-				ESP_LOGI(TAG, "IP_EVENT_STA_GOT_IP");
-				xEventGroupSetBits(connection_event_group, WIFI_CONNECTED_BIT);
-				break;
-			default:
-				break;
-		}
-	}
-}
-
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
 	// esp_mqtt_event_handle_t event = event_data;
 	// esp_mqtt_client_handle_t client = event->client;
 
 	switch (event_id) {
 		case MQTT_EVENT_CONNECTED:
-			xEventGroupSetBits(connection_event_group, MQTT_CONNECTED_BIT);
+			xEventGroupSetBits(mqtt_connection_event_group, MQTT_CONNECTED_BIT);
 			ESP_LOGD(TAG, "MQTT_EVENT_CONNECTED");
 			break;
 		case MQTT_EVENT_DISCONNECTED:
-			xEventGroupClearBits(connection_event_group, MQTT_CONNECTED_BIT);
+			xEventGroupClearBits(mqtt_connection_event_group, MQTT_CONNECTED_BIT);
 			ESP_LOGW(TAG, "MQTT_EVENT_DISCONNECTED");
 			break;
-		case MQTT_EVENT_PUBLISHED: // Fired only for QoS>0
+		case MQTT_EVENT_PUBLISHED:
+			// Message acknowledged by broker
+			// Fired only for QoS>0
 			ESP_LOGD(TAG, "MQTT_EVENT_PUBLISHED");
 			xSemaphoreGive(mqtt_publish_mutex);
 			break;
 		case MQTT_EVENT_DELETED:
+			// Message deleted from outbox (not acknowledged by broker)
+			// Fired only if message couldn't have been sent or acknowledged before expiring
 			ESP_LOGD(TAG, "MQTT_EVENT_DELETED");
 			xSemaphoreGive(mqtt_publish_mutex);
 			break;
@@ -114,83 +94,46 @@ static void publish(esp_mqtt_client_handle_t *client, const uint16_t sensor, con
 	snprintf(topic, sizeof(topic), "vogonair/%s/raw", mac_address);
 
 	if (message) {
-		BaseType_t ret = xSemaphoreTake(mqtt_publish_mutex, pdMS_TO_TICKS(60 * 1000));
+		BaseType_t ret = xSemaphoreTake(mqtt_publish_mutex, pdMS_TO_TICKS(MQTT_MESSAGE_WAIT_TIME_MS));
 
 		if (ret == pdFALSE) {
 			ESP_LOGE(TAG, "Failed to send MQTT message [sensor=%d, type=%d, value=%.2f] within timeout", sensor, type, value);
-			cJSON_Delete(root);
-			free(message);
-			return;
+
+			// cJSON_Delete(root);
+			// free(message);
+			// return;
 		}
 
-		esp_mqtt_client_publish(*client, topic, message, 0, AT_LEAST_ONCE, NOT_RETAIN);
+		ESP_LOGI(TAG, "Publishing to topic %s: %s", topic, message);
+		esp_mqtt_client_publish(*client, topic, message, LEN_AUTO, AT_LEAST_ONCE, NOT_RETAIN);
 		free(message);
 	}
 
 	cJSON_Delete(root);
 }
 
-void mqtt_sync() {
-	connection_event_group = xEventGroupCreate();
-	mqtt_publish_mutex = xSemaphoreCreateCounting(MAX_CONCURRENT_MQTT_MESSAGES, MAX_CONCURRENT_MQTT_MESSAGES);
-
-	// Init TCP/IP stack
-	ESP_ERROR_CHECK(esp_netif_init());
-	ESP_ERROR_CHECK(esp_event_loop_create_default());
-	esp_netif_t *netif = esp_netif_create_default_wifi_sta();
-	esp_netif_set_hostname(netif, DEVICE_NAME);
-	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-	ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-	esp_event_handler_instance_t wifi_handler_event_instance;
-	ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
-														ESP_EVENT_ANY_ID,
-														&wifi_event_handler,
-														NULL,
-														&wifi_handler_event_instance));
-
-	esp_event_handler_instance_t got_ip_event_instance;
-	ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
-														IP_EVENT_STA_GOT_IP,
-														&ip_event_handler,
-														NULL,
-														&got_ip_event_instance));
-
-	wifi_config_t wifi_config = {
-		.sta = {
-			.ssid = CONFIG_SYNC_WIFI_SSID,
-			.password = CONFIG_SYNC_WIFI_PASSWORD,
-		},
-	};
-
-	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-	ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
-	ESP_ERROR_CHECK(esp_wifi_start());
-
-	EventBits_t bits = xEventGroupWaitBits(connection_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(60 * 1000));
-
-	if (bits & WIFI_CONNECTED_BIT) {
-		ESP_LOGI(TAG, "Connected to Wi-Fi: %s", CONFIG_SYNC_WIFI_SSID);
-	} else {
-		ESP_LOGE(TAG, "Failed to connect to Wi-Fi: %s", CONFIG_SYNC_WIFI_SSID);
-		return;
-	}
+esp_err_t mqtt_sync() {
+	mqtt_publish_mutex = xSemaphoreCreateCounting(MQTT_CONCURRENT_MESSAGES, MQTT_CONCURRENT_MESSAGES);
 
 	esp_mqtt_client_config_t mqtt_cfg = {
-		.broker.address.uri = CONFIG_SYNC_MQTT_BROKER,
-	};
+		.broker.address.uri = shared_config.SYNC_MQTT_BROKER_URL,
+		.network.timeout_ms = MQTT_MESSAGE_TIMEOUT_MS};
 
 	esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
-	ESP_ERROR_CHECK(esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client));
-	ESP_ERROR_CHECK(esp_mqtt_client_start(client));
+	RETURN_ON_ERROR(esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client));
+	RETURN_ON_ERROR(esp_mqtt_client_start(client));
 
-	bits = xEventGroupWaitBits(connection_event_group, MQTT_CONNECTED_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(60 * 1000));
+	EventBits_t bits = xEventGroupWaitBits(
+		mqtt_connection_event_group,
+		MQTT_CONNECTED_BIT,
+		pdFALSE, pdTRUE,
+		pdMS_TO_TICKS(MQTT_CONNECTION_TIMEOUT));
 
 	if (bits & MQTT_CONNECTED_BIT) {
-		ESP_LOGI(TAG, "Connected to MQTT broker: %s", CONFIG_SYNC_MQTT_BROKER);
+		ESP_LOGI(TAG, "Connected to MQTT broker: %s", CONFIG_MQTT_BROKER_URL);
 	} else {
-		ESP_LOGE(TAG, "Failed to connect to MQTT broker: %s", CONFIG_SYNC_MQTT_BROKER);
-		return;
+		ESP_LOGE(TAG, "Failed to connect to MQTT broker: %s", CONFIG_MQTT_BROKER_URL);
+		return ESP_FAIL;
 	}
 
 	ESP_LOGI(TAG, "Syncing data...");
@@ -204,5 +147,6 @@ void mqtt_sync() {
 	ESP_LOGI(TAG, "Data synced successfully!");
 
 	esp_mqtt_client_stop(client);
-	ESP_ERROR_CHECK(esp_wifi_stop());
+	esp_mqtt_client_destroy(client);
+	return ESP_OK;
 }

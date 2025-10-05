@@ -18,7 +18,7 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 6.0.0
+    version: 5.5.1
 direct_dependencies:
 - dht
 - esp_idf_lib_helpers

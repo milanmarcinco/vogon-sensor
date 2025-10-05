@@ -6,7 +6,7 @@
 
 #define DHT22_PIN 23
 
-static const char *TAG = "MODULE[DHT22]";
+static const char *TAG = "MODULE[dht22]";
 
 void dht22_task() {
 	float temperature_total = 0;

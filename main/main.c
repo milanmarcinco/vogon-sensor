@@ -13,8 +13,9 @@
 #include "sensors.h"
 #include "shared.h"
 #include "sync.h"
+#include "wifi.h"
 
-static const char *TAG = "MODULE[MAIN]";
+static const char *TAG = "MODULE[main]";
 
 // Number of concurrent tasks running measurements to wait for before MQTT sync
 #define TASK_COUNT 2
@@ -132,13 +133,20 @@ void app_main(void) {
 		}
 	}
 
-	ESP_LOGI(TAG, "Sending data to MQTT broker...");
-	mqtt_sync();
+	init_tcp_ip();
+	ret = wifi_connect();
 
-	ESP_LOGI(TAG, "Going to sleep for 10 minutes...");
+	if (ret == ESP_OK) {
+		mqtt_sync();
+		wifi_disconnect();
+	}
+
+	uint64_t sleep_time = shared_config.GENERAL_MEASUREMENT_INTERVAL * 60 * 1000000;
+
+	ESP_LOGI(TAG, "Going to sleep for %d minutes...", shared_config.GENERAL_MEASUREMENT_INTERVAL);
 	rtc_gpio_pullup_dis(BLE_CONFIG_TRIGGER_GPIO);  // Make sure pull-up is off
 	rtc_gpio_pulldown_en(BLE_CONFIG_TRIGGER_GPIO); // Have GPIO pin default to LOW
 	esp_sleep_enable_ext0_wakeup(BLE_CONFIG_TRIGGER_GPIO, 0);
 	rtc_gpio_hold_en(BLE_CONFIG_TRIGGER_GPIO); // Freeze GPIO configuration
-	esp_deep_sleep(shared_config.GENERAL_MEASUREMENT_INTERVAL * 60 * 1000000);
+	esp_deep_sleep(sleep_time);
 }

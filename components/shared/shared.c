@@ -4,7 +4,7 @@
 
 #include "shared.h"
 
-static const char *TAG = "MODULE[SHARED]";
+static const char *TAG = "MODULE[shared]";
 
 SemaphoreHandle_t sync_mutex;
 shared_data_t shared_data;
