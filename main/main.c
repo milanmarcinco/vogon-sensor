@@ -93,7 +93,7 @@ void app_main(void) {
 		(void *)BLE_CONFIG_TRIGGER_GPIO));
 
 	// Initialize sync semaphore to number of concurrent tasks
-	sync_mutex = xSemaphoreCreateCounting(TASK_COUNT, 0);
+	// sync_mutex = xSemaphoreCreateCounting(TASK_COUNT, 0);
 
 	// Initialize shared data
 	shared_data.temperature = 0;
@@ -101,37 +101,37 @@ void app_main(void) {
 	shared_data.pm25 = 0;
 	shared_data.pm10 = 0;
 
-	ESP_LOGI(TAG, "Warming up...");
-	vTaskDelay(pdMS_TO_TICKS(5 * 1000));
+	// ESP_LOGI(TAG, "Warming up...");
+	// vTaskDelay(pdMS_TO_TICKS(5 * 1000));
 
-	ESP_LOGI(TAG, "Starting DHT22 task!");
-	xTaskCreatePinnedToCore(
-		dht22_task,
-		"dht22",
-		configMINIMAL_STACK_SIZE * 8,
-		NULL,
-		10,
-		NULL,
-		APP_CPU_NUM);
+	// ESP_LOGI(TAG, "Starting DHT22 task!");
+	// xTaskCreatePinnedToCore(
+	// 	dht22_task,
+	// 	"dht22",
+	// 	configMINIMAL_STACK_SIZE * 8,
+	// 	NULL,
+	// 	10,
+	// 	NULL,
+	// 	APP_CPU_NUM);
 
-	ESP_LOGI(TAG, "Starting SDS011 task!");
-	xTaskCreatePinnedToCore(
-		sds011_task,
-		"sds011",
-		configMINIMAL_STACK_SIZE * 8,
-		NULL,
-		10,
-		NULL,
-		APP_CPU_NUM);
+	// ESP_LOGI(TAG, "Starting SDS011 task!");
+	// xTaskCreatePinnedToCore(
+	// 	sds011_task,
+	// 	"sds011",
+	// 	configMINIMAL_STACK_SIZE * 8,
+	// 	NULL,
+	// 	10,
+	// 	NULL,
+	// 	APP_CPU_NUM);
 
-	ESP_LOGI(TAG, "All tasks are pinned!");
+	// ESP_LOGI(TAG, "All tasks are pinned!");
 
-	// Wait for concurrent tasks to finish
-	for (int i = 0; i < TASK_COUNT; i++) {
-		if (xSemaphoreTake(sync_mutex, portMAX_DELAY) != pdTRUE) {
-			ESP_LOGE(TAG, "Failed to take semaphore!");
-		}
-	}
+	// // Wait for concurrent tasks to finish
+	// for (int i = 0; i < TASK_COUNT; i++) {
+	// 	if (xSemaphoreTake(sync_mutex, portMAX_DELAY) != pdTRUE) {
+	// 		ESP_LOGE(TAG, "Failed to take semaphore!");
+	// 	}
+	// }
 
 	init_tcp_ip();
 	ret = wifi_connect();
