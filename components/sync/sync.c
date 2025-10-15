@@ -130,9 +130,9 @@ esp_err_t mqtt_sync() {
 		pdMS_TO_TICKS(MQTT_CONNECTION_TIMEOUT));
 
 	if (bits & MQTT_CONNECTED_BIT) {
-		ESP_LOGI(TAG, "Connected to MQTT broker: %s", CONFIG_MQTT_BROKER_URL);
+		ESP_LOGI(TAG, "Connected to MQTT broker: %s", shared_config.SYNC_MQTT_BROKER_URL);
 	} else {
-		ESP_LOGE(TAG, "Failed to connect to MQTT broker: %s", CONFIG_MQTT_BROKER_URL);
+		ESP_LOGE(TAG, "Failed to connect to MQTT broker: %s", shared_config.SYNC_MQTT_BROKER_URL);
 		return ESP_FAIL;
 	}
 
