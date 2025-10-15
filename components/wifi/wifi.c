@@ -88,17 +88,17 @@ esp_err_t wifi_connect() {
 			sizeof(wifi_config.sta.ssid));
 
 	switch (shared_config.SYNC_WIFI_PROTOCOL) {
-		case WIFI_OPEN:
+		case WIFI_AUTH_OPEN:
 			break;
 
-		case WIFI_WPA2_PERSONAL:
+		case WIFI_AUTH_WPA2_PSK:
 			strncpy((char *)wifi_config.sta.password,
 					shared_config.SYNC_WIFI_PASSWORD,
 					sizeof(wifi_config.sta.password));
 
 			break;
 
-		case WIFI_WPA2_ENTERPRISE:
+		case WIFI_AUTH_WPA2_ENTERPRISE:
 			RETURN_ON_ERROR(esp_eap_client_set_username(
 				(uint8_t *)shared_config.SYNC_WIFI_USERNAME,
 				strlen(shared_config.SYNC_WIFI_USERNAME)));
@@ -109,6 +109,12 @@ esp_err_t wifi_connect() {
 
 			RETURN_ON_ERROR(esp_eap_client_set_eap_methods(ESP_EAP_TYPE_PEAP | ESP_EAP_TYPE_TTLS));
 			RETURN_ON_ERROR(esp_wifi_sta_enterprise_enable());
+
+			break;
+
+		default:
+			ESP_LOGE(TAG, "Unsupported Wi-Fi protocol: %d", shared_config.SYNC_WIFI_PROTOCOL);
+			return ESP_FAIL;
 	}
 
 	RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA));

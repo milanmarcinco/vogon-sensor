@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
@@ -50,7 +51,7 @@ typedef struct {
 	int SENSORS_SDS011_MEASUREMENT_BULK_SIZE;
 	int SENSORS_SDS011_MEASUREMENT_BULK_SLEEP;
 
-	wifi_protocol_t SYNC_WIFI_PROTOCOL;
+	wifi_auth_mode_t SYNC_WIFI_PROTOCOL;
 	char SYNC_WIFI_SSID[32];
 	char SYNC_WIFI_USERNAME[64];
 	char SYNC_WIFI_PASSWORD[64];
