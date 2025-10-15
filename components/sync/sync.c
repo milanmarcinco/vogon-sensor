@@ -59,13 +59,13 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 		case MQTT_EVENT_PUBLISHED:
 			// Message acknowledged by broker
 			// Fired only for QoS>0
-			ESP_LOGD(TAG, "MQTT_EVENT_PUBLISHED");
+			ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED");
 			xSemaphoreGive(mqtt_publish_mutex);
 			break;
 		case MQTT_EVENT_DELETED:
 			// Message deleted from outbox (not acknowledged by broker)
 			// Fired only if message couldn't have been sent or acknowledged before expiring
-			ESP_LOGD(TAG, "MQTT_EVENT_DELETED");
+			ESP_LOGI(TAG, "MQTT_EVENT_DELETED");
 			xSemaphoreGive(mqtt_publish_mutex);
 			break;
 		default:
@@ -113,6 +113,7 @@ static void publish(esp_mqtt_client_handle_t *client, const uint16_t sensor, con
 }
 
 esp_err_t mqtt_sync() {
+	mqtt_connection_event_group = xEventGroupCreate();
 	mqtt_publish_mutex = xSemaphoreCreateCounting(MQTT_CONCURRENT_MESSAGES, MQTT_CONCURRENT_MESSAGES);
 
 	esp_mqtt_client_config_t mqtt_cfg = {
@@ -143,7 +144,10 @@ esp_err_t mqtt_sync() {
 	publish(&client, 0x02, 0x02, shared_data.pm10);
 
 	// Wait for all messages to be published
-	xSemaphoreTake(mqtt_publish_mutex, portMAX_DELAY);
+	while (uxSemaphoreGetCount(mqtt_publish_mutex) != MQTT_CONCURRENT_MESSAGES) {
+		vTaskDelay(pdMS_TO_TICKS(50));
+	}
+
 	ESP_LOGI(TAG, "Data synced successfully!");
 
 	esp_mqtt_client_stop(client);
