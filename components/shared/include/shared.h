@@ -5,6 +5,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
+#include "wifi.h"
+
 #define DEVICE_NAME "Vogon"
 #define NVS_PARTITION "nvs_app"
 #define NVS_NAMESPACE "vogon"
@@ -12,6 +14,7 @@
 // NVS keys - max 15 characters
 
 #define NVS_KEY_GENERAL_MEASUREMENT_INTERVAL "read_interval"
+#define NVS_KEY_GENERAL_CONFIGURED "configured"
 
 #define NVS_KEY_SENSORS_DHT22_MEASUREMENT_BULK_SIZE "dht_bulk_size"
 #define NVS_KEY_SENSORS_DHT22_MEASUREMENT_BULK_SLEEP "dht_bulk_sleep"
@@ -21,6 +24,8 @@
 #define NVS_KEY_SENSORS_SDS011_MEASUREMENT_BULK_SLEEP "sds_bulk_sleep"
 
 #define NVS_KEY_SYNC_WIFI_SSID "wifi_ssid"
+#define NVS_KEY_SYNC_WIFI_PROTOCOL "wifi_protocol"
+#define NVS_KEY_SYNC_WIFI_USERNAME "wifi_username"
 #define NVS_KEY_SYNC_WIFI_PASSWORD "wifi_password"
 #define NVS_KEY_SYNC_MQTT_BROKER_URL "mqtt_broker_url"
 
@@ -36,12 +41,18 @@ typedef struct
 
 typedef struct {
 	int GENERAL_MEASUREMENT_INTERVAL;
+	bool GENERAL_CONFIGURED;
+
 	int SENSORS_DHT22_MEASUREMENT_BULK_SIZE;
 	int SENSORS_DHT22_MEASUREMENT_BULK_SLEEP;
+
 	int SENSORS_SDS011_WARM_UP;
 	int SENSORS_SDS011_MEASUREMENT_BULK_SIZE;
 	int SENSORS_SDS011_MEASUREMENT_BULK_SLEEP;
+
+	wifi_protocol_t SYNC_WIFI_PROTOCOL;
 	char SYNC_WIFI_SSID[32];
+	char SYNC_WIFI_USERNAME[64];
 	char SYNC_WIFI_PASSWORD[64];
 	char SYNC_MQTT_BROKER_URL[256];
 } shared_config_t;

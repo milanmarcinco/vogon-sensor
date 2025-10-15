@@ -1,4 +1,5 @@
 #include "esp_bit_defs.h"
+#include "esp_eap_client.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
@@ -8,6 +9,8 @@
 
 #include "helpers.h"
 #include "shared.h"
+
+#include "wifi.h"
 
 #define WIFI_CONNECTION_TIMEOUT 10 * 1000
 
@@ -60,8 +63,8 @@ esp_err_t wifi_connect() {
 	wifi_connection_event_group = xEventGroupCreate();
 
 	esp_netif_t *netif = esp_netif_create_default_wifi_sta();
-	esp_netif_set_hostname(netif, DEVICE_NAME);
 	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+	esp_netif_set_hostname(netif, DEVICE_NAME);
 	RETURN_ON_ERROR(esp_wifi_init(&cfg));
 
 	esp_event_handler_instance_t wifi_handler_event_instance;
@@ -78,14 +81,35 @@ esp_err_t wifi_connect() {
 														NULL,
 														&got_ip_event_instance));
 
-	wifi_config_t wifi_config = {
-		.sta = {
-			.threshold.authmode = WIFI_AUTH_WPA2_PSK,
-		},
-	};
+	wifi_config_t wifi_config = {};
 
-	strncpy((char *)wifi_config.sta.ssid, shared_config.SYNC_WIFI_SSID, sizeof(wifi_config.sta.ssid));
-	strncpy((char *)wifi_config.sta.password, shared_config.SYNC_WIFI_PASSWORD, sizeof(wifi_config.sta.password));
+	strncpy((char *)wifi_config.sta.ssid,
+			shared_config.SYNC_WIFI_SSID,
+			sizeof(wifi_config.sta.ssid));
+
+	switch (shared_config.SYNC_WIFI_PROTOCOL) {
+		case WIFI_OPEN:
+			break;
+
+		case WIFI_WPA2_PERSONAL:
+			strncpy((char *)wifi_config.sta.password,
+					shared_config.SYNC_WIFI_PASSWORD,
+					sizeof(wifi_config.sta.password));
+
+			break;
+
+		case WIFI_WPA2_ENTERPRISE:
+			RETURN_ON_ERROR(esp_eap_client_set_username(
+				(uint8_t *)shared_config.SYNC_WIFI_USERNAME,
+				strlen(shared_config.SYNC_WIFI_USERNAME)));
+
+			RETURN_ON_ERROR(esp_eap_client_set_password(
+				(uint8_t *)shared_config.SYNC_WIFI_PASSWORD,
+				strlen(shared_config.SYNC_WIFI_PASSWORD)));
+
+			RETURN_ON_ERROR(esp_eap_client_set_eap_methods(ESP_EAP_TYPE_PEAP | ESP_EAP_TYPE_TTLS));
+			RETURN_ON_ERROR(esp_wifi_sta_enterprise_enable());
+	}
 
 	RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA));
 	RETURN_ON_ERROR(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
