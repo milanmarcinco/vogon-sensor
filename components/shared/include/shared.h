@@ -14,26 +14,23 @@
 
 // NVS keys - max 15 characters
 
-#define NVS_KEY_GENERAL_MEASUREMENT_INTERVAL "read_interval"
-#define NVS_KEY_GENERAL_CONFIGURED "configured"
+#define NVS_KEY_CONFIG "config"
 
-#define NVS_KEY_SENSORS_DHT22_MEASUREMENT_BULK_SIZE "dht_bulk_size"
-#define NVS_KEY_SENSORS_DHT22_MEASUREMENT_BULK_SLEEP "dht_bulk_sleep"
-
-#define NVS_KEY_SENSORS_SDS011_WARM_UP "sds_warm_up"
-#define NVS_KEY_SENSORS_SDS011_MEASUREMENT_BULK_SIZE "sds_bulk_size"
-#define NVS_KEY_SENSORS_SDS011_MEASUREMENT_BULK_SLEEP "sds_bulk_sleep"
-
-#define NVS_KEY_SYNC_WIFI_SSID "wifi_ssid"
-#define NVS_KEY_SYNC_WIFI_PROTOCOL "wifi_protocol"
-#define NVS_KEY_SYNC_WIFI_USERNAME "wifi_username"
-#define NVS_KEY_SYNC_WIFI_PASSWORD "wifi_password"
-#define NVS_KEY_SYNC_MQTT_BROKER_URL "mqtt_broker_url"
+#define CFG_KEY_SYNC_WIFI_SSID "wifi_ssid"
+#define CFG_KEY_SYNC_WIFI_USERNAME "wifi_username"
+#define CFG_KEY_SYNC_WIFI_PASSWORD "wifi_password"
+#define CFG_KEY_SYNC_WIFI_PROTOCOL "wifi_protocol"
+#define CFG_KEY_SYNC_MQTT_BROKER_URL "mqtt_broker_url"
+#define CFG_KEY_SENSORS_GENERAL_MEASUREMENT_INTERVAL "measurement_interval"
+#define CFG_KEY_SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SIZE "environmental_bulk_size"
+#define CFG_KEY_SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SLEEP "environmental_bulk_sleep"
+#define CFG_KEY_SENSORS_PARTICULATE_WARM_UP "particulate_warm_up"
+#define CFG_KEY_SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE "particulate_bulk_size"
+#define CFG_KEY_SENSORS_PARTICULATE_MEASUREMENT_BULK_SLEEP "particulate_bulk_sleep"
 
 // ===== ===== ===== =====
 
-typedef struct
-{
+typedef struct {
 	float temperature;
 	float humidity;
 	uint16_t pm25;
@@ -42,19 +39,19 @@ typedef struct
 
 typedef struct {
 	int GENERAL_MEASUREMENT_INTERVAL;
-	bool GENERAL_CONFIGURED;
 
-	int SENSORS_DHT22_MEASUREMENT_BULK_SIZE;
-	int SENSORS_DHT22_MEASUREMENT_BULK_SLEEP;
+	int SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SIZE;
+	int SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SLEEP;
 
-	int SENSORS_SDS011_WARM_UP;
-	int SENSORS_SDS011_MEASUREMENT_BULK_SIZE;
-	int SENSORS_SDS011_MEASUREMENT_BULK_SLEEP;
+	int SENSORS_PARTICULATE_WARM_UP;
+	int SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE;
+	int SENSORS_PARTICULATE_MEASUREMENT_BULK_SLEEP;
 
-	wifi_auth_mode_t SYNC_WIFI_PROTOCOL;
 	char SYNC_WIFI_SSID[32];
 	char SYNC_WIFI_USERNAME[64];
 	char SYNC_WIFI_PASSWORD[64];
+	wifi_auth_mode_t SYNC_WIFI_PROTOCOL;
+
 	char SYNC_MQTT_BROKER_URL[256];
 } shared_config_t;
 
