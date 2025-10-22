@@ -141,9 +141,9 @@ void app_main(void) {
 		wifi_disconnect();
 	}
 
-	uint64_t sleep_time = shared_config.GENERAL_MEASUREMENT_INTERVAL * 60 * 1000000;
+	uint64_t sleep_time = shared_config.SENSORS_GENERAL_MEASUREMENT_INTERVAL * 60 * 1000000;
 
-	ESP_LOGI(TAG, "Going to sleep for %d minutes...", shared_config.GENERAL_MEASUREMENT_INTERVAL);
+	ESP_LOGI(TAG, "Going to sleep for %d minutes...", shared_config.SENSORS_GENERAL_MEASUREMENT_INTERVAL);
 	rtc_gpio_pullup_dis(BLUETOOTH_TRIGGER_GPIO);  // Make sure pull-up is off
 	rtc_gpio_pulldown_en(BLUETOOTH_TRIGGER_GPIO); // Have GPIO pin default to LOW
 	esp_sleep_enable_ext0_wakeup(BLUETOOTH_TRIGGER_GPIO, 0);
