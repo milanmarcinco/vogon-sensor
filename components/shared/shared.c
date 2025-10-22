@@ -9,10 +9,8 @@
 static const char *TAG = "MODULE[shared]";
 
 SemaphoreHandle_t sync_mutex;
-shared_data_t shared_data;
-
-shared_config_t shared_config = {
-	.SENSORS_GENERAL_MEASUREMENT_INTERVAL = -1};
+shared_data_t shared_data = {0};
+shared_config_t shared_config = {0};
 
 typedef enum {
 	TYPE_INT,
@@ -21,26 +19,32 @@ typedef enum {
 
 typedef struct {
 	void *destination;
+	size_t destination_size;
 	char *json_key;
 	handle_type_t type;
+
+	union {
+		int default_int;
+		const char *default_str;
+	};
 } config_mapping_t;
 
 config_mapping_t mappings[] = {
-	{&shared_config.SENSORS_GENERAL_MEASUREMENT_INTERVAL, CFG_KEY_SENSORS_GENERAL_MEASUREMENT_INTERVAL, TYPE_INT},
+	{&shared_config.SENSORS_GENERAL_MEASUREMENT_INTERVAL, sizeof(int), CFG_KEY_SENSORS_GENERAL_MEASUREMENT_INTERVAL, TYPE_INT, .default_int = CONFIG_SENSORS_GENERAL_MEASUREMENT_INTERVAL},
 
-	{&shared_config.SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SIZE, CFG_KEY_SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SIZE, TYPE_INT},
-	{&shared_config.SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SLEEP, CFG_KEY_SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SLEEP, TYPE_INT},
+	{&shared_config.SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SIZE, sizeof(int), CFG_KEY_SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SIZE, TYPE_INT, .default_int = CONFIG_SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SIZE},
+	{&shared_config.SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SLEEP, sizeof(int), CFG_KEY_SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SLEEP, TYPE_INT, .default_int = CONFIG_SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SLEEP},
 
-	{&shared_config.SENSORS_PARTICULATE_WARM_UP, CFG_KEY_SENSORS_PARTICULATE_WARM_UP, TYPE_INT},
-	{&shared_config.SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE, CFG_KEY_SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE, TYPE_INT},
-	{&shared_config.SENSORS_PARTICULATE_MEASUREMENT_BULK_SLEEP, CFG_KEY_SENSORS_PARTICULATE_MEASUREMENT_BULK_SLEEP, TYPE_INT},
+	{&shared_config.SENSORS_PARTICULATE_WARM_UP, sizeof(int), CFG_KEY_SENSORS_PARTICULATE_WARM_UP, TYPE_INT, .default_int = CONFIG_SENSORS_PARTICULATE_WARM_UP},
+	{&shared_config.SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE, sizeof(int), CFG_KEY_SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE, TYPE_INT, .default_int = CONFIG_SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE},
+	{&shared_config.SENSORS_PARTICULATE_MEASUREMENT_BULK_SLEEP, sizeof(int), CFG_KEY_SENSORS_PARTICULATE_MEASUREMENT_BULK_SLEEP, TYPE_INT, .default_int = CONFIG_SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE},
 
-	{shared_config.SYNC_WIFI_SSID, CFG_KEY_SYNC_WIFI_SSID, TYPE_STR},
-	{shared_config.SYNC_WIFI_USERNAME, CFG_KEY_SYNC_WIFI_USERNAME, TYPE_STR},
-	{shared_config.SYNC_WIFI_PASSWORD, CFG_KEY_SYNC_WIFI_PASSWORD, TYPE_STR},
-	{&shared_config.SYNC_WIFI_PROTOCOL, CFG_KEY_SYNC_WIFI_PROTOCOL, TYPE_INT},
+	{shared_config.SYNC_WIFI_SSID, sizeof(char) * 32, CFG_KEY_SYNC_WIFI_SSID, TYPE_STR, .default_str = ""},
+	{shared_config.SYNC_WIFI_USERNAME, sizeof(char) * 64, CFG_KEY_SYNC_WIFI_USERNAME, TYPE_STR, .default_str = ""},
+	{shared_config.SYNC_WIFI_PASSWORD, sizeof(char) * 64, CFG_KEY_SYNC_WIFI_PASSWORD, TYPE_STR, .default_str = ""},
+	{&shared_config.SYNC_WIFI_PROTOCOL, sizeof(int), CFG_KEY_SYNC_WIFI_PROTOCOL, TYPE_INT, .default_int = CONFIG_SYNC_WIFI_PROTOCOL},
 
-	{shared_config.SYNC_MQTT_BROKER_URL, CFG_KEY_SYNC_MQTT_BROKER_URL, TYPE_STR}};
+	{shared_config.SYNC_MQTT_BROKER_URL, sizeof(char) * 256, CFG_KEY_SYNC_MQTT_BROKER_URL, TYPE_STR, .default_str = CONFIG_SYNC_MQTT_BROKER_URL}};
 
 static bool ensure_config() {
 	bool conditions[] = {
@@ -98,10 +102,9 @@ esp_err_t load_shared_config() {
 
 	for (size_t i = 0; i < sizeof(mappings) / sizeof(config_mapping_t); i++) {
 		config_mapping_t *mapping = &mappings[i];
+		cJSON *item = cJSON_GetObjectItemCaseSensitive(root, mapping->json_key);
 
 		if (strcmp(mapping->json_key, CFG_KEY_SYNC_WIFI_PROTOCOL) == 0) {
-			cJSON *item = cJSON_GetObjectItemCaseSensitive(root, mapping->json_key);
-
 			if (cJSON_IsString(item) && (item->valuestring != NULL)) {
 				wifi_auth_mode_t protocol = wifi_auth_mode_from_string(item->valuestring);
 				*((wifi_auth_mode_t *)mapping->destination) = protocol;
@@ -112,23 +115,26 @@ esp_err_t load_shared_config() {
 
 		switch (mapping->type) {
 			case TYPE_INT: {
-				cJSON *item = cJSON_GetObjectItemCaseSensitive(root, mapping->json_key);
-
 				if (cJSON_IsNumber(item)) {
 					*((int *)mapping->destination) = item->valueint;
+				} else {
+					*((int *)mapping->destination) = mapping->default_int;
 				}
 
 				break;
 			}
 
 			case TYPE_STR: {
-				cJSON *item = cJSON_GetObjectItemCaseSensitive(root, mapping->json_key);
+				char *value = NULL;
 
 				if (cJSON_IsString(item) && (item->valuestring != NULL)) {
-					size_t max_size = sizeof(mapping->destination) - 1; // Ensure space for null terminator
-					strncpy((char *)mapping->destination, item->valuestring, max_size);
-					((char *)mapping->destination)[strlen(item->valuestring)] = '\0';
+					value = item->valuestring;
+				} else {
+					value = (char *)mapping->default_str;
 				}
+
+				strncpy((char *)mapping->destination, value, mapping->destination_size - 1);
+				((char *)mapping->destination)[strlen(value)] = '\0';
 
 				break;
 			}

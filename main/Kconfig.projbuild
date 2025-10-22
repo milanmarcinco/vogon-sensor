@@ -1,0 +1,33 @@
+menu "Vogon Configuration"
+	config SENSORS_GENERAL_MEASUREMENT_INTERVAL
+		int "Measurement interval"
+		default 10
+
+	config SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SIZE
+		int "ENVIRONMENTAL SENSOR: Measurement bulk size"
+		default 10
+
+	config SENSORS_ENVIRONMENTAL_MEASUREMENT_BULK_SLEEP
+		int "ENVIRONMENTAL SENSOR: Measurement bulk sleep (seconds)"
+		default 5
+
+	config SENSORS_PARTICULATE_WARM_UP
+		int "PARTICULATE SENSOR: Warm up period (seconds)"
+		default 10
+
+	config SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE
+		int "PARTICULATE SENSOR: Measurement bulk size"
+		default 5
+
+	config SENSORS_PARTICULATE_MEASUREMENT_BULK_SLEEP
+		int "PARTICULATE SENSOR: Measurement bulk sleep"
+		default 10
+
+	config SYNC_WIFI_PROTOCOL
+		int "SYNC: WiFi security protocol (ESP-IDF auth mode constant)"
+		default 0
+
+	config SYNC_MQTT_BROKER_URL
+		string "SYNC: MQTT broker URL"
+		default "mqtt:localhost:1883"
+endmenu
