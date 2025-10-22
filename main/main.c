@@ -46,8 +46,8 @@ void app_main(void) {
 	esp_reset_reason_t reset_reason = esp_reset_reason();
 	esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
 
-	rtc_gpio_hold_dis(BLUETOOTH_TRIGGER_GPIO);		// Allow GPIO pin reconfiguration
-	rtc_gpio_pullup_dis(BLUETOOTH_TRIGGER_GPIO);	// Clear any previous pull-ups
+	rtc_gpio_hold_dis(BLUETOOTH_TRIGGER_GPIO);	   // Allow GPIO pin reconfiguration
+	rtc_gpio_pullup_dis(BLUETOOTH_TRIGGER_GPIO);   // Clear any previous pull-ups
 	rtc_gpio_pulldown_dis(BLUETOOTH_TRIGGER_GPIO); // Clear any previous pull-downs
 
 	ESP_LOGI(TAG, "Reset reason: %d", reset_reason);
@@ -60,8 +60,7 @@ void app_main(void) {
 	}
 
 	// Load configuration from NVS
-	// ret = load_shared_config();
-	ret = -1;
+	ret = load_shared_config();
 	if (ret != ESP_OK) {
 		ESP_LOGW(TAG, "Vogon not yet configured. Entering Bluetooth configuration mode.");
 		bluetooth_gatt_server_start();

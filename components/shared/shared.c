@@ -41,29 +41,12 @@ config_mapping_t mappings[] = {
 	{shared_config.SYNC_MQTT_BROKER_URL, CFG_KEY_SYNC_MQTT_BROKER_URL, TYPE_STR}};
 
 esp_err_t load_shared_config() {
-	nvs_handle_t nvs_handle;
-	esp_err_t ret = nvs_open_from_partition(NVS_PARTITION, NVS_NAMESPACE, NVS_READONLY, &nvs_handle);
+	char *json_string = NULL;
+	size_t json_len = 0;
+	esp_err_t ret = nvs_read_str(NVS_KEY_CONFIG, &json_string, &json_len, NULL);
 
-	if (ret != ESP_OK) {
-		ESP_LOGE(TAG, "Error opening NVS handle: %s", esp_err_to_name(ret));
-		return ret;
-	}
-
-	size_t required_size = 0;
-	ret = nvs_get_str(nvs_handle, NVS_KEY_CONFIG, NULL, &required_size);
-	RETURN_ON_ERROR(ret);
-
-	char *json_string = malloc(required_size);
-	if (json_string == NULL) {
-		ESP_LOGE(TAG, "Failed to allocate memory for config string");
-		nvs_close(nvs_handle);
-		return ESP_ERR_NO_MEM;
-	}
-
-	ret = nvs_get_str(nvs_handle, NVS_KEY_CONFIG, json_string, &required_size);
-	RETURN_ON_ERROR(ret);
-
-	nvs_close(nvs_handle);
+	if (json_string == NULL)
+		return ESP_FAIL;
 
 	cJSON *root = cJSON_Parse(json_string);
 	if (root == NULL) {
@@ -89,7 +72,9 @@ esp_err_t load_shared_config() {
 				cJSON *item = cJSON_GetObjectItemCaseSensitive(root, mapping->json_key);
 
 				if (cJSON_IsString(item) && (item->valuestring != NULL)) {
-					strncpy((char *)mapping->destination, item->valuestring, required_size);
+					size_t max_size = sizeof(mapping->destination) - 1; // Ensure space for null terminator
+					strncpy((char *)mapping->destination, item->valuestring, max_size);
+					((char *)mapping->destination)[strlen(item->valuestring)] = '\0';
 				}
 
 				break;
