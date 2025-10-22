@@ -103,3 +103,54 @@ esp_err_t load_shared_config() {
 
 	return ESP_OK;
 }
+
+esp_err_t nvs_read_str(const char *key, char **value, size_t *len, const char *default_value) {
+	nvs_handle_t nvs_handle;
+	esp_err_t ret = nvs_open_from_partition(NVS_PARTITION, NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
+	RETURN_ON_ERROR(ret);
+
+	ret = nvs_get_str(nvs_handle, key, NULL, len);
+
+	if (ret == ESP_ERR_NVS_NOT_FOUND) {
+		nvs_close(nvs_handle);
+
+		if (default_value == NULL) {
+			*value = NULL;
+			*len = 0;
+			return ESP_ERR_NVS_NOT_FOUND;
+		}
+
+		*len = strlen(default_value) + 1;
+		*value = malloc(*len);
+
+		if (*value == NULL) {
+			return ESP_ERR_NO_MEM;
+		}
+
+		memcpy(*value, default_value, *len);
+		return ESP_ERR_NVS_NOT_FOUND;
+	}
+
+	if (ret != ESP_OK) {
+		nvs_close(nvs_handle);
+		return ret;
+	}
+
+	*value = malloc(*len);
+	if (*value == NULL) {
+		nvs_close(nvs_handle);
+		return ESP_ERR_NO_MEM;
+	}
+
+	ret = nvs_get_str(nvs_handle, key, *value, len);
+	nvs_close(nvs_handle);
+
+	if (ret != ESP_OK) {
+		free(*value);
+		*value = NULL;
+		*len = 0;
+		return ret;
+	}
+
+	return ESP_OK;
+}

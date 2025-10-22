@@ -243,48 +243,17 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 					 conn_id, trans_id, handle, offset);
 
 			if (handle == config_service_handle_table[CONFIG_VALUE_IDX]) {
-				esp_err_t ret;
-
 				static esp_gatt_rsp_t rsp;
 				memset(&rsp, 0, sizeof(rsp));
 
-				nvs_handle_t nvs_handle;
-				ret = nvs_open_from_partition(NVS_PARTITION, NVS_NAMESPACE, NVS_READWRITE, &nvs_handle);
-				if (ret != ESP_OK) goto handle_read_error;
-
 				size_t len = 0;
 				char *data = NULL;
-				ret = nvs_get_str(nvs_handle, NVS_KEY_CONFIG, NULL, &len);
+				const char *default_value = "{}";
 
-				switch (ret) {
-					case ESP_OK: {
-						data = malloc(len);
-						if (data == NULL) {
-							ret = ESP_ERR_NO_MEM;
-							goto handle_read_error;
-						}
+				esp_err_t ret = nvs_read_str(NVS_KEY_CONFIG, &data, &len, default_value);
+				if (ret != ESP_OK && ret != ESP_ERR_NVS_NOT_FOUND) goto handle_read_error;
 
-						ret = nvs_get_str(nvs_handle, NVS_KEY_CONFIG, data, &len);
-						if (ret != ESP_OK) {
-							free(data);
-							goto handle_read_error;
-						}
-
-						break;
-					}
-
-					case ESP_ERR_NVS_NOT_FOUND: {
-						len = 2;
-						data = malloc(len + 1);
-						if (data == NULL) {
-							ret = ESP_ERR_NO_MEM;
-							goto handle_read_error;
-						}
-
-						strcpy(data, "{}");
-						break;
-					}
-				}
+				if (len > 0) len -= 1; // Exclude null terminator
 
 				if (offset < len) {
 					len -= offset;

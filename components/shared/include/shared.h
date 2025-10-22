@@ -60,3 +60,4 @@ extern shared_data_t shared_data;
 extern shared_config_t shared_config;
 
 esp_err_t load_shared_config();
+esp_err_t nvs_read_str(const char *key, char **value, size_t *len, const char *default_value);
