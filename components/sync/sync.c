@@ -20,13 +20,20 @@
 
 #define MQTT_CONNECTION_TIMEOUT 60 * 1000
 #define MQTT_CONCURRENT_MESSAGES 4
-#define MQTT_MESSAGE_TIMEOUT_MS 10 * 1000
+#define MQTT_MESSAGE_TIMEOUT_MS 30 * 1000
 #define MQTT_MESSAGE_WAIT_TIME_MS 15 * 1000
 
 static const char *TAG = "MODULE[sync]";
 
 static EventGroupHandle_t mqtt_connection_event_group;
 static SemaphoreHandle_t mqtt_publish_mutex;
+
+extern const uint8_t client_cert_pem_start[] asm("_binary_client_pem_start");
+extern const uint8_t client_cert_pem_end[] asm("_binary_client_pem_end");
+extern const uint8_t client_key_pem_start[] asm("_binary_client_key_start");
+extern const uint8_t client_key_pem_end[] asm("_binary_client_key_end");
+extern const uint8_t ca_cert_pem_start[] asm("_binary_ca_pem_start");
+extern const uint8_t ca_cert_pem_end[] asm("_binary_ca_pem_end");
 
 static const int MQTT_CONNECTED_BIT = BIT0;
 
@@ -117,8 +124,31 @@ esp_err_t mqtt_sync() {
 	mqtt_publish_mutex = xSemaphoreCreateCounting(MQTT_CONCURRENT_MESSAGES, MQTT_CONCURRENT_MESSAGES);
 
 	esp_mqtt_client_config_t mqtt_cfg = {
-		.broker.address.uri = shared_config.SYNC_MQTT_BROKER_URL,
-		.network.timeout_ms = MQTT_MESSAGE_TIMEOUT_MS};
+		.broker = {
+			.address = {
+				.uri = shared_config.SYNC_MQTT_BROKER_URL,
+			},
+			.verification = {
+				.certificate = (const char *)ca_cert_pem_start,
+				.certificate_len = ca_cert_pem_end - ca_cert_pem_start,
+				.skip_cert_common_name_check = false,
+				.use_global_ca_store = false,
+			},
+		},
+		.network = {
+			.timeout_ms = MQTT_MESSAGE_TIMEOUT_MS,
+			.reconnect_timeout_ms = 5000,
+			.disable_auto_reconnect = false,
+		},
+		.credentials = {
+			.authentication = {
+				.certificate = (const char *)client_cert_pem_start,
+				.certificate_len = client_cert_pem_end - client_cert_pem_start,
+				.key = (const char *)client_key_pem_start,
+				.key_len = client_key_pem_end - client_key_pem_start,
+			},
+		},
+	};
 
 	esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
 	RETURN_ON_ERROR(esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, client));
