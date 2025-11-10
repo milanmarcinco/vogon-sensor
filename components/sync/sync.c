@@ -170,8 +170,8 @@ esp_err_t mqtt_sync() {
 	ESP_LOGI(TAG, "Syncing data...");
 	publish(&client, 0x01, 0x01, shared_data.temperature);
 	publish(&client, 0x01, 0x02, shared_data.humidity);
-	publish(&client, 0x02, 0x01, shared_data.pm25);
-	publish(&client, 0x02, 0x02, shared_data.pm10);
+	publish(&client, 0x02, 0x03, shared_data.pm25);
+	publish(&client, 0x02, 0x04, shared_data.pm10);
 
 	// Wait for all messages to be published
 	while (uxSemaphoreGetCount(mqtt_publish_mutex) != MQTT_CONCURRENT_MESSAGES) {
