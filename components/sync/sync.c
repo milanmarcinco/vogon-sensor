@@ -87,12 +87,9 @@ static void get_mac_address_string(char *mac_str) {
 }
 
 static void publish(esp_mqtt_client_handle_t *client, const uint16_t sensor, const uint8_t type, const double value) {
-	char mac_address[MAC_LEN];
 	char topic[TOPIC_LEN];
-	get_mac_address_string(mac_address);
 
 	cJSON *root = cJSON_CreateObject();
-	cJSON_AddStringToObject(root, "address", mac_address);
 	cJSON_AddNumberToObject(root, "sensor", sensor);
 	cJSON_AddNumberToObject(root, "parameter", type);
 	cJSON_AddNumberToObject(root, "value", value);
