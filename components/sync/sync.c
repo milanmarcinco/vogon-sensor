@@ -15,7 +15,6 @@
 
 #include "sync.h"
 
-#define MAC_LEN 18
 #define TOPIC_LEN 100
 
 #define MQTT_CONNECTION_TIMEOUT 60 * 1000
@@ -80,13 +79,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 	}
 }
 
-static void get_mac_address_string(char *mac_str) {
-	uint8_t mac[6];
-	ESP_ERROR_CHECK(esp_wifi_get_mac(ESP_IF_WIFI_STA, mac));
-	snprintf(mac_str, MAC_LEN, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-}
-
 static void publish(esp_mqtt_client_handle_t *client, const uint16_t sensor, const uint8_t type, const double value) {
+	char mac_address[MAC_LEN];
 	char topic[TOPIC_LEN];
 
 	cJSON *root = cJSON_CreateObject();
@@ -95,6 +89,8 @@ static void publish(esp_mqtt_client_handle_t *client, const uint16_t sensor, con
 	cJSON_AddNumberToObject(root, "value", value);
 
 	char *message = cJSON_Print(root);
+
+	get_mac_address_string(mac_address);
 	snprintf(topic, sizeof(topic), "vogonair/%s/raw", mac_address);
 
 	if (message) {

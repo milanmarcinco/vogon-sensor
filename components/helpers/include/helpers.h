@@ -25,4 +25,6 @@
 		}                                                               \
 	} while (0)
 
+#define MAC_LEN 18
+
 char *dynamic_format(const char *fmt, ...);
