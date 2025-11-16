@@ -63,21 +63,30 @@ static struct gatts_profile_instance {
 static const uint16_t primary_service_uuid = ESP_GATT_UUID_PRI_SERVICE;
 static const uint16_t characteristic_declaration_uuid = ESP_GATT_UUID_CHAR_DECLARE;
 static const uint16_t characteristic_declaration_size = sizeof(uint8_t);
+
+static uint8_t characteristic_prop_write = ESP_GATT_CHAR_PROP_BIT_WRITE;
 static uint8_t characteristic_prop_read_write = ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE;
 
 static uint8_t config_service_uuid[ESP_UUID_LEN_128] = {
 	// Configuration service uuid: d0a823a6-fa98-4597-b0c1-d8577be0e158
 	0x58, 0xE1, 0xE0, 0x7B, 0x57, 0xD8, 0xC1, 0xB0, 0x97, 0x45, 0x98, 0xFA, 0xA6, 0x23, 0xA8, 0xD0};
 
-#define NUM_CHARACTERISTICS 1
+#define NUM_CHARACTERISTICS 2
+
 static const uint16_t config_characteristic_uuid = 0x0101;
 static const size_t config_characteristic_value_size = 1024;
+
+static const uint16_t restart_characteristic_uuid = 0x0201;
+static const size_t restart_characteristic_value_size = 0;
 
 enum {
 	CONFIG_SERVICE_DECLARATION_IDX,
 
 	CONFIG_CHARACTERISTIC_IDX,
 	CONFIG_VALUE_IDX,
+
+	RESTART_CHARACTERISTIC_IDX,
+	RESTART_VALUE_IDX,
 
 	CONFIG_SERVICE_IDX_MAX
 };
@@ -166,6 +175,9 @@ static const esp_gatts_attr_db_t gatts_attr_db[CONFIG_SERVICE_IDX_MAX] =
 
 		[CONFIG_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read_write}},
 		[CONFIG_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&config_characteristic_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, config_characteristic_value_size, 0, NULL}},
+
+		[RESTART_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_write}},
+		[RESTART_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&restart_characteristic_uuid, ESP_GATT_PERM_WRITE, restart_characteristic_value_size, 0, NULL}},
 
 		// Characteristic user description (user-readable name) descriptor
 		// [XXXXX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_description_uuid, ESP_GATT_PERM_READ, sizeof(characteristic_name), sizeof(characteristic_name) - 1, characteristic_name}},
@@ -320,6 +332,15 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 
 				nvs_close(nvs_handle);
 				esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, NULL);
+				return;
+			}
+
+			if (handle == config_service_handle_table[RESTART_VALUE_IDX]) {
+				ESP_LOGI(TAG_GATTS_PROFILE, "Restart requested via GATT");
+
+				esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, NULL);
+				vTaskDelay(pdMS_TO_TICKS(3000));
+				esp_restart();
 				return;
 			}
 
