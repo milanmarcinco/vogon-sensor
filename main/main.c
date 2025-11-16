@@ -92,17 +92,18 @@ void app_main(void) {
 		gpio_isr_handler,
 		(void *)BLUETOOTH_TRIGGER_GPIO));
 
-	// Initialize sync semaphore to number of concurrent tasks
-	sync_mutex = xSemaphoreCreateCounting(TASK_COUNT, 0);
-
 	// Initialize shared data
 	shared_data.temperature = 0;
 	shared_data.humidity = 0,
 	shared_data.pm25 = 0;
 	shared_data.pm10 = 0;
 
+#if !CONFIG_DEBUG_SKIP_MEASUREMENTS
 	ESP_LOGI(TAG, "Warming up...");
 	vTaskDelay(pdMS_TO_TICKS(5 * 1000));
+
+	// Initialize sync semaphore to number of concurrent tasks
+	sync_mutex = xSemaphoreCreateCounting(TASK_COUNT, 0);
 
 	ESP_LOGI(TAG, "Starting DHT22 task!");
 	xTaskCreatePinnedToCore(
@@ -132,6 +133,7 @@ void app_main(void) {
 			ESP_LOGE(TAG, "Failed to take semaphore!");
 		}
 	}
+#endif
 
 	init_tcp_ip();
 	ret = wifi_connect();

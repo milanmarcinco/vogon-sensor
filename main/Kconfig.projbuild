@@ -30,4 +30,8 @@ menu "Vogon Configuration"
 	config SYNC_MQTT_BROKER_URL
 		string "SYNC: MQTT broker URL"
 		default "mqtt:localhost:1883"
+
+	config DEBUG_SKIP_MEASUREMENTS
+		bool "DEBUG: Skip measurements"
+		default false
 endmenu
