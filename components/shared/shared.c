@@ -89,7 +89,7 @@ wifi_auth_mode_t wifi_auth_mode_from_string(const char *str) {
 esp_err_t load_shared_config() {
 	char *json_string = NULL;
 	size_t json_len = 0;
-	esp_err_t ret = nvs_read_str(NVS_KEY_CONFIG, &json_string, &json_len, NULL);
+	nvs_read_str(NVS_KEY_CONFIG, &json_string, &json_len, NULL);
 
 	if (json_string == NULL)
 		return ESP_FAIL;
