@@ -32,9 +32,13 @@ static const char *TAG_GAP = "MODULE[bluetooth][gap]";
 #define PROFILE_APP_IDX 0
 #define PROFILE_APP_ID 0x00
 
+static bool is_idle = true;
+static int idle_seconds = 0;
+
 // Type declaration
 
 static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param);
+void bluetooth_gatt_server_idle_task();
 
 typedef enum {
 	TYPE_INT,
@@ -224,16 +228,19 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 		case ESP_GATTS_START_EVT:
 			ESP_LOGI(TAG_GATTS_PROFILE, "[ESP_GATTS_START_EVT]: Service started");
 			bt_led_state = LED_BLINK_SLOW;
+			xSemaphoreTake(ble_mutex, portMAX_DELAY);
 			break;
 
 		case ESP_GATTS_STOP_EVT:
 			ESP_LOGI(TAG_GATTS_PROFILE, "[ESP_GATTS_STOP_EVT]: Service stopped");
 			bt_led_state = LED_OFF;
+			xSemaphoreGive(ble_mutex);
 			break;
 
 		case ESP_GATTS_CONNECT_EVT: {
 			const uint8_t *bda = param->connect.remote_bda;
 			ESP_LOGI(TAG_GATTS_PROFILE, "[ESP_GATTS_CONNECT_EVT]: Client %02x:%02x:%02x:%02x:%02x:%02x", bda[0], bda[1], bda[2], bda[3], bda[4], bda[5]);
+			is_idle = false;
 			esp_ble_gap_stop_advertising();
 			bt_led_state = LED_ON;
 			break;
@@ -241,9 +248,9 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 
 		case ESP_GATTS_DISCONNECT_EVT:
 			ESP_LOGI(TAG_GATTS_PROFILE, "[ESP_GATTS_DISCONNECT_EVT]: Restarting advertising");
+			is_idle = true;
 			esp_ble_gap_start_advertising(&adv_params);
 			bt_led_state = LED_BLINK_SLOW;
-			xSemaphoreGive(ble_mutex);
 			break;
 
 		case ESP_GATTS_READ_EVT: {
@@ -398,12 +405,20 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
 }
 
 void bluetooth_gatt_server_start() {
-	xSemaphoreTake(ble_mutex, portMAX_DELAY);
 	bt_led_state = LED_OFF;
 
 	xTaskCreatePinnedToCore(
 		led_task,
 		"led",
+		configMINIMAL_STACK_SIZE * 8,
+		NULL,
+		10,
+		NULL,
+		APP_CPU_NUM);
+
+	xTaskCreatePinnedToCore(
+		bluetooth_gatt_server_idle_task,
+		"bluetooth_gatt_server_idle_task",
 		configMINIMAL_STACK_SIZE * 8,
 		NULL,
 		10,
@@ -457,6 +472,8 @@ void bluetooth_gatt_server_start() {
 	return;
 }
 
+// Start GATT server on GPIO trigger
+
 QueueHandle_t gpio_evt_queue;
 
 void IRAM_ATTR gpio_isr_handler(void *arg) {
@@ -470,6 +487,44 @@ void bluetooth_gat_server_trigger_task() {
 	while (true) {
 		if (xQueueReceive(gpio_evt_queue, &pin, portMAX_DELAY)) {
 			bluetooth_gatt_server_start();
+		}
+	}
+}
+
+// Keep running Bluetooth GATT server until X time idle (during advertising)
+
+void bluetooth_gatt_server_idle_task() {
+	while (true) {
+		vTaskDelay(pdMS_TO_TICKS(1000));
+
+		if (is_idle) {
+			idle_seconds++;
+			ESP_LOGI(TAG_MAIN, "Bluetooth GATT server idle for %d seconds", idle_seconds);
+
+			if (idle_seconds >= CONFIG_BLE_IDLE_TIMEOUT) {
+				ESP_LOGI(TAG_MAIN, "Bluetooth GATT server idle timeout reached - stopping GATT server");
+
+				esp_ble_gap_stop_advertising();
+				vTaskDelay(pdMS_TO_TICKS(100));
+
+				esp_ble_gatts_stop_service(
+					config_service_handle_table[CONFIG_SERVICE_DECLARATION_IDX]);
+				vTaskDelay(pdMS_TO_TICKS(100));
+
+				esp_ble_gatts_app_unregister(
+					profile_table[PROFILE_APP_IDX].gatts_if);
+				vTaskDelay(pdMS_TO_TICKS(100));
+
+				esp_bluedroid_disable();
+				esp_bluedroid_deinit();
+				esp_bt_controller_disable();
+				esp_bt_controller_deinit();
+				vTaskDelay(pdMS_TO_TICKS(100));
+
+				vTaskDelete(NULL);
+			}
+		} else {
+			idle_seconds = 0;
 		}
 	}
 }

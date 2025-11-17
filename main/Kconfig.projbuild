@@ -31,6 +31,10 @@ menu "Vogon Configuration"
 		string "SYNC: MQTT broker URL"
 		default "mqtt:localhost:1883"
 
+	config BLE_IDLE_TIMEOUT
+		int "BLE: Idle timeout (seconds)"
+		default 60
+
 	config DEBUG_SKIP_MEASUREMENTS
 		bool "DEBUG: Skip measurements"
 		default false
