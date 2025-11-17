@@ -56,6 +56,7 @@ typedef struct {
 } shared_config_t;
 
 extern SemaphoreHandle_t sync_mutex;
+extern SemaphoreHandle_t ble_mutex;
 extern shared_data_t shared_data;
 extern shared_config_t shared_config;
 

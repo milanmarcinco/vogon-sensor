@@ -243,6 +243,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 			ESP_LOGI(TAG_GATTS_PROFILE, "[ESP_GATTS_DISCONNECT_EVT]: Restarting advertising");
 			esp_ble_gap_start_advertising(&adv_params);
 			bt_led_state = LED_BLINK_SLOW;
+			xSemaphoreGive(ble_mutex);
 			break;
 
 		case ESP_GATTS_READ_EVT: {
@@ -397,6 +398,7 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
 }
 
 void bluetooth_gatt_server_start() {
+	xSemaphoreTake(ble_mutex, portMAX_DELAY);
 	bt_led_state = LED_OFF;
 
 	xTaskCreatePinnedToCore(

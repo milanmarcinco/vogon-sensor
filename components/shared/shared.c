@@ -9,6 +9,7 @@
 static const char *TAG = "MODULE[shared]";
 
 SemaphoreHandle_t sync_mutex;
+SemaphoreHandle_t ble_mutex;
 shared_data_t shared_data = {0};
 shared_config_t shared_config = {0};
 

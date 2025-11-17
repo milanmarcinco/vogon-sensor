@@ -40,6 +40,9 @@ void app_main(void) {
 		ESP_ERROR_CHECK(nvs_flash_init_partition(NVS_PARTITION));
 	}
 
+	// Initialize BLE mutex
+	ble_mutex = xSemaphoreCreateCounting(1, 1);
+
 	// Detect wakeup cause and choose device mode
 	// - boot button press - bluetooth configuration mode
 	// - otherwise normal operation
@@ -56,7 +59,7 @@ void app_main(void) {
 	if (wakeup_cause == ESP_SLEEP_WAKEUP_EXT0) {
 		ESP_LOGI(TAG, "Woke up from BOOT button press - starting Bluetooth configuration mode");
 		bluetooth_gatt_server_start();
-		return;
+		goto prepare_for_deep_sleep;
 	}
 
 	// Load configuration from NVS
@@ -64,7 +67,7 @@ void app_main(void) {
 	if (ret != ESP_OK) {
 		ESP_LOGW(TAG, "Vogon not yet configured. Entering Bluetooth configuration mode.");
 		bluetooth_gatt_server_start();
-		return;
+		goto prepare_for_deep_sleep;
 	}
 
 	// Start BLE configuration server on EN button press (START_BLUETOOTH_GPIO)
@@ -142,6 +145,14 @@ void app_main(void) {
 		mqtt_sync();
 		wifi_disconnect();
 	}
+
+prepare_for_deep_sleep:
+
+	// Ensure BLE is not running
+	ESP_LOGI(TAG, "Waiting for BLE to stop running...");
+	xSemaphoreTake(ble_mutex, portMAX_DELAY);
+
+	// Prepare for deep sleep
 
 	uint64_t sleep_time = shared_config.SENSORS_GENERAL_MEASUREMENT_INTERVAL * 60 * 1000000;
 
