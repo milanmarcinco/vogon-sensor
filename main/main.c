@@ -40,6 +40,9 @@ void app_main(void) {
 		ESP_ERROR_CHECK(nvs_flash_init_partition(NVS_PARTITION));
 	}
 
+	// Initialize TCP/IP stack
+	ESP_ERROR_CHECK(init_tcp_ip());
+
 	// Initialize BLE mutex
 	ble_mutex = xSemaphoreCreateCounting(1, 1);
 
@@ -138,9 +141,7 @@ void app_main(void) {
 	}
 #endif
 
-	init_tcp_ip();
 	ret = wifi_connect();
-
 	if (ret == ESP_OK) {
 		mqtt_sync();
 		wifi_disconnect();

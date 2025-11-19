@@ -56,16 +56,17 @@ esp_err_t init_tcp_ip() {
 	ESP_LOGI(TAG, "Init TCP/IP");
 	RETURN_ON_ERROR(esp_netif_init());
 	RETURN_ON_ERROR(esp_event_loop_create_default());
+
+	esp_netif_t *netif = esp_netif_create_default_wifi_sta();
+	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+	RETURN_ON_ERROR(esp_netif_set_hostname(netif, DEVICE_NAME));
+	RETURN_ON_ERROR(esp_wifi_init(&cfg));
+
 	return ESP_OK;
 }
 
 esp_err_t wifi_connect() {
 	wifi_connection_event_group = xEventGroupCreate();
-
-	esp_netif_t *netif = esp_netif_create_default_wifi_sta();
-	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-	esp_netif_set_hostname(netif, DEVICE_NAME);
-	RETURN_ON_ERROR(esp_wifi_init(&cfg));
 
 	esp_event_handler_instance_t wifi_handler_event_instance;
 	RETURN_ON_ERROR(esp_event_handler_instance_register(WIFI_EVENT,
