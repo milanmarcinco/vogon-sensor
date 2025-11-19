@@ -20,6 +20,7 @@
 #include "internal/led.h"
 
 #include "shared.h"
+#include "helpers.h"
 
 // static const char *TAG = "MODULE[bluetooth]";
 static const char *TAG_MAIN = "MODULE[bluetooth][main]";
@@ -68,6 +69,7 @@ static const uint16_t primary_service_uuid = ESP_GATT_UUID_PRI_SERVICE;
 static const uint16_t characteristic_declaration_uuid = ESP_GATT_UUID_CHAR_DECLARE;
 static const uint16_t characteristic_declaration_size = sizeof(uint8_t);
 
+static uint8_t characteristic_prop_read = ESP_GATT_CHAR_PROP_BIT_READ;
 static uint8_t characteristic_prop_write = ESP_GATT_CHAR_PROP_BIT_WRITE;
 static uint8_t characteristic_prop_read_write = ESP_GATT_CHAR_PROP_BIT_READ | ESP_GATT_CHAR_PROP_BIT_WRITE;
 
@@ -80,7 +82,10 @@ static uint8_t config_service_uuid[ESP_UUID_LEN_128] = {
 static const uint16_t config_characteristic_uuid = 0x0101;
 static const size_t config_characteristic_value_size = 1024;
 
-static const uint16_t restart_characteristic_uuid = 0x0201;
+static const uint16_t mac_address_characteristic_uuid = 0x0201;
+static const size_t mac_address_characteristic_value_size = 0;
+
+static const uint16_t restart_characteristic_uuid = 0x0301;
 static const size_t restart_characteristic_value_size = 0;
 
 enum {
@@ -88,6 +93,9 @@ enum {
 
 	CONFIG_CHARACTERISTIC_IDX,
 	CONFIG_VALUE_IDX,
+
+	MAC_ADDRESS_CHARACTERISTIC_IDX,
+	MAC_ADDRESS_VALUE_IDX,
 
 	RESTART_CHARACTERISTIC_IDX,
 	RESTART_VALUE_IDX,
@@ -179,6 +187,9 @@ static const esp_gatts_attr_db_t gatts_attr_db[CONFIG_SERVICE_IDX_MAX] =
 
 		[CONFIG_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read_write}},
 		[CONFIG_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&config_characteristic_uuid, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE, config_characteristic_value_size, 0, NULL}},
+
+		[MAC_ADDRESS_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_read}},
+		[MAC_ADDRESS_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&mac_address_characteristic_uuid, ESP_GATT_PERM_READ, mac_address_characteristic_value_size, 0, NULL}},
 
 		[RESTART_CHARACTERISTIC_IDX] = {{ESP_GATT_AUTO_RSP}, {ESP_UUID_LEN_16, (uint8_t *)&characteristic_declaration_uuid, ESP_GATT_PERM_READ, characteristic_declaration_size, characteristic_declaration_size, &characteristic_prop_write}},
 		[RESTART_VALUE_IDX] = {{ESP_GATT_RSP_BY_APP}, {ESP_UUID_LEN_16, (uint8_t *)&restart_characteristic_uuid, ESP_GATT_PERM_WRITE, restart_characteristic_value_size, 0, NULL}},
@@ -296,6 +307,31 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 				return;
 			}
 
+			if (handle == config_service_handle_table[MAC_ADDRESS_VALUE_IDX]) {
+				static esp_gatt_rsp_t rsp;
+				memset(&rsp, 0, sizeof(rsp));
+
+				size_t len = MAC_LEN;
+				char mac_address[MAC_LEN];
+				get_mac_address_string(mac_address);
+
+				if (len > 0) len -= 1; // Exclude null terminator
+				
+				if (offset < len) {
+					len -= offset;
+					memcpy(rsp.attr_value.value, mac_address + offset, len);
+				} else
+					len = 0;
+
+				rsp.attr_value.len = len;
+				rsp.attr_value.handle = handle;
+
+				ESP_LOG_BUFFER_HEXDUMP(TAG_GATTS_PROFILE, mac_address, len, ESP_LOG_INFO);
+
+				esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, &rsp);
+				return;
+			}
+			
 			break;
 		}
 
