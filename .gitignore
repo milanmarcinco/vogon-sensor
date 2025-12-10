@@ -1,6 +1,5 @@
 build/
 managed_components/
-certs/*
 
 sdkconfig
 sdkconfig.old

@@ -24,7 +24,3 @@
 			break;                                                      \
 		}                                                               \
 	} while (0)
-
-#define MAC_LEN 18
-
-void get_mac_address_string(char *mac_str);
