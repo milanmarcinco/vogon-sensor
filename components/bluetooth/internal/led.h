@@ -6,4 +6,4 @@ typedef enum {
 } bt_led_state_t;
 
 extern bt_led_state_t bt_led_state;
-void led_task();
+void led_task(void *arg);

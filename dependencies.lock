@@ -1,27 +1,71 @@
 dependencies:
-  dht:
-    component_hash: 5f3bed365a4775a403a9e7d339609dbbe5121680b53f37fc46bb777bc918d049
+  esp-idf-lib/dht:
+    component_hash: 2b04a1fb76ec589184fcacd91ad726fc9734238bae943c9b1e56f2672fef8226
+    dependencies:
+    - name: esp-idf-lib/esp_idf_lib_helpers
+      version: '*'
+    source:
+      git: https://github.com/esp-idf-lib/dht.git
+      path: .
+      type: git
+    targets:
+    - esp32
+    - esp32c2
+    - esp32c3
+    - esp32c5
+    - esp32c6
+    - esp32c61
+    - esp32h2
+    - esp32p4
+    - esp32s2
+    - esp32s3
+    version: a454d72eec6be0cb3e666936feeaaddbd3481874
+  esp-idf-lib/esp_idf_lib_helpers:
+    component_hash: 689853bb8993434f9556af0f2816e808bf77b5d22100144b21f3519993daf237
     dependencies: []
     source:
-      git: https://github.com/UncleRus/esp-idf-lib.git
-      path: components/dht/
-      type: git
-    version: a02cd6bb5190cab379125140780adcb8d88f9650
-  esp_idf_lib_helpers:
-    component_hash: 798b1a6294af807374e9de099905af9a9b779a27068437c2912a7232b87dc6ac
-    dependencies: []
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32
+    - esp32c2
+    - esp32c3
+    - esp32c5
+    - esp32c6
+    - esp32c61
+    - esp32h2
+    - esp32p4
+    - esp32s2
+    - esp32s3
+    version: 1.4.0
+  espressif/cjson:
+    component_hash: e788323270d90738662d66fffa910bfe1fba019bba087f01557e70c40485b469
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
     source:
-      git: https://github.com/UncleRus/esp-idf-lib.git
-      path: components/esp_idf_lib_helpers/
-      type: git
-    version: a02cd6bb5190cab379125140780adcb8d88f9650
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.7.19~2
+  espressif/mqtt:
+    component_hash: fb18bc3b65aa8c94693a9811ffc322cca8a65d92d5ec84983d3e385080e3969c
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.1.0
   idf:
     source:
       type: idf
-    version: 5.5.1
+    version: 6.2.0
 direct_dependencies:
-- dht
-- esp_idf_lib_helpers
-manifest_hash: 51a4c7d6e209242b0aa13a553c26e499a6f12f1c9bb0e80e223515df918d6b21
+- esp-idf-lib/dht
+- espressif/cjson
+- espressif/mqtt
+manifest_hash: 7cc7f11fcf18388b8bc481eeae7e5e55c93f791f8e86e829e47cbe4bfb2d2bdc
 target: esp32
-version: 2.0.0
+version: 3.0.0

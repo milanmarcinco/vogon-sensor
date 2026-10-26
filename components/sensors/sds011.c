@@ -115,7 +115,7 @@ static esp_err_t sds011_write_state(char *buffer, uint8_t state) {
 /**
  * Protocol description: https://sensebox.kaufen/assets/datenblatt/SDS011_Control_Protocol.pdf
  */
-void sds011_task() {
+void sds011_task(void *arg) {
 	const uart_config_t uart_config = {
 		.baud_rate = 9600,
 		.data_bits = UART_DATA_8_BITS,

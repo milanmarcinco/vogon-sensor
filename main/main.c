@@ -111,15 +111,15 @@ void app_main(void) {
 	// Initialize sync semaphore to number of concurrent tasks
 	sync_mutex = xSemaphoreCreateCounting(TASK_COUNT, 0);
 
-	ESP_LOGI(TAG, "Starting DHT22 task!");
-	xTaskCreatePinnedToCore(
-		dht22_task,
-		"dht22",
-		configMINIMAL_STACK_SIZE * 8,
-		NULL,
-		10,
-		NULL,
-		APP_CPU_NUM);
+	// ESP_LOGI(TAG, "Starting DHT22 task!");
+	// xTaskCreatePinnedToCore(
+	// 	dht22_task,
+	// 	"dht22",
+	// 	configMINIMAL_STACK_SIZE * 8,
+	// 	NULL,
+	// 	10,
+	// 	NULL,
+	// 	APP_CPU_NUM);
 
 	ESP_LOGI(TAG, "Starting SDS011 task!");
 	xTaskCreatePinnedToCore(

@@ -2,5 +2,5 @@
 
 #pragma once
 
-void dht22_task();
-void sds011_task();
+void dht22_task(void *arg);
+void sds011_task(void *arg);
