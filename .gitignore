@@ -4,5 +4,6 @@ certs/*
 
 sdkconfig
 sdkconfig.old
+sdkconfig.local
 
 .vscode/

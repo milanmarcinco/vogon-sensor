@@ -8,7 +8,7 @@
 
 static const char *TAG = "MODULE[dht22]";
 
-void dht22_task() {
+void dht22_task(void *arg) {
 	float temperature_total = 0;
 	float humidity_total = 0;
 

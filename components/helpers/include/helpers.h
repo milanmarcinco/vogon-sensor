@@ -1,3 +1,8 @@
+#pragma once
+
+#include "esp_err.h"
+#include "esp_log.h"
+
 #define RETURN_ON_ERROR(x)                                              \
 	do {                                                                \
 		esp_err_t __err = (x);                                          \

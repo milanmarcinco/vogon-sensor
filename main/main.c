@@ -1,10 +1,14 @@
 #include "stdio.h"
+#include "inttypes.h"
+#include "stdbool.h"
 
 #include "driver/gpio.h"
 #include "driver/rtc_io.h"
+#include "esp_bit_defs.h"
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_sleep.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "nvs_flash.h"
 
@@ -50,16 +54,18 @@ void app_main(void) {
 	// - boot button press - bluetooth configuration mode
 	// - otherwise normal operation
 	esp_reset_reason_t reset_reason = esp_reset_reason();
-	esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
+	uint32_t wakeup_causes = esp_sleep_get_wakeup_causes();
+
+	bool woke_from_boot_button = (wakeup_causes & BIT(ESP_SLEEP_WAKEUP_EXT0)) != 0;
 
 	rtc_gpio_hold_dis(BLUETOOTH_TRIGGER_GPIO);	   // Allow GPIO pin reconfiguration
 	rtc_gpio_pullup_dis(BLUETOOTH_TRIGGER_GPIO);   // Clear any previous pull-ups
 	rtc_gpio_pulldown_dis(BLUETOOTH_TRIGGER_GPIO); // Clear any previous pull-downs
 
 	ESP_LOGI(TAG, "Reset reason: %d", reset_reason);
-	ESP_LOGI(TAG, "Wakeup cause: %d", wakeup_cause);
+	ESP_LOGI(TAG, "Wakeup causes: 0x%" PRIx32, wakeup_causes);
 
-	if (wakeup_cause == ESP_SLEEP_WAKEUP_EXT0) {
+	if (woke_from_boot_button) {
 		ESP_LOGI(TAG, "Woke up from BOOT button press - starting Bluetooth configuration mode");
 		bluetooth_gatt_server_start();
 		goto prepare_for_deep_sleep;
@@ -111,15 +117,15 @@ void app_main(void) {
 	// Initialize sync semaphore to number of concurrent tasks
 	sync_mutex = xSemaphoreCreateCounting(TASK_COUNT, 0);
 
-	ESP_LOGI(TAG, "Starting DHT22 task!");
-	xTaskCreatePinnedToCore(
-		dht22_task,
-		"dht22",
-		configMINIMAL_STACK_SIZE * 8,
-		NULL,
-		10,
-		NULL,
-		APP_CPU_NUM);
+	// ESP_LOGI(TAG, "Starting DHT22 task!");
+	// xTaskCreatePinnedToCore(
+	// 	dht22_task,
+	// 	"dht22",
+	// 	configMINIMAL_STACK_SIZE * 8,
+	// 	NULL,
+	// 	10,
+	// 	NULL,
+	// 	APP_CPU_NUM);
 
 	ESP_LOGI(TAG, "Starting SDS011 task!");
 	xTaskCreatePinnedToCore(

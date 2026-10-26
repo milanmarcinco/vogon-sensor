@@ -32,6 +32,7 @@ An ESP-IDF (v6) project for an ESP32-based environmental / air quality sensor no
 Prerequisites:
 
 -   ESP-IDF exported environment (IDF_PATH set).
+-   MQTT TLS files in `certs/`: `ca.pem`, `client.pem`, and `client.key` (not committed).
 
 Steps:
 
@@ -46,7 +47,7 @@ idf.py flash monitor         # Flash and open serial monitor
 
 ## Configuration
 
-Project / feature toggles live in Kconfig menus (run `idf.py menuconfig`). Defaults are captured in `sdkconfig.defaults`; a generated working config is `sdkconfig` (ignored in VCS).
+Project / feature toggles live in Kconfig menus (run `idf.py menuconfig`). Shared defaults live in `sdkconfig.defaults`; optional `sdkconfig.local` overrides them for a local build and is ignored in VCS. The generated config lives in `build/sdkconfig` and is regenerated when either defaults file changes. Persist configuration changes in the defaults files; menuconfig changes are lost on regeneration. Do not use `idf.py save-defconfig` with local secrets loaded.
 
 ## MQTT Topics and messages
 

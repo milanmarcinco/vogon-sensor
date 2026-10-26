@@ -1,6 +1,11 @@
+#pragma once
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+
 extern QueueHandle_t gpio_evt_queue;
 
 void bluetooth_gatt_server_start();
 
 void gpio_isr_handler(void *arg);
-void bluetooth_gat_server_trigger_task();
+void bluetooth_gat_server_trigger_task(void *arg);

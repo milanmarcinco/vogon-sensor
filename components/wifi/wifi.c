@@ -119,7 +119,7 @@ esp_err_t wifi_connect() {
 	}
 
 	RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA));
-	RETURN_ON_ERROR(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
+	RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 	RETURN_ON_ERROR(esp_wifi_start());
 
 	EventBits_t bits = xEventGroupWaitBits(

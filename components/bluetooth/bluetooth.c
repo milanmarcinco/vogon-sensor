@@ -39,7 +39,7 @@ static int idle_seconds = 0;
 // Type declaration
 
 static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param);
-void bluetooth_gatt_server_idle_task();
+void bluetooth_gatt_server_idle_task(void *arg);
 
 typedef enum {
 	TYPE_INT,
@@ -517,7 +517,7 @@ void IRAM_ATTR gpio_isr_handler(void *arg) {
 	xQueueSendFromISR(gpio_evt_queue, &pin, NULL);
 }
 
-void bluetooth_gat_server_trigger_task() {
+void bluetooth_gat_server_trigger_task(void *arg) {
 	int pin;
 
 	while (true) {
@@ -529,7 +529,7 @@ void bluetooth_gat_server_trigger_task() {
 
 // Keep running Bluetooth GATT server until X time idle (during advertising)
 
-void bluetooth_gatt_server_idle_task() {
+void bluetooth_gatt_server_idle_task(void *arg) {
 	while (true) {
 		vTaskDelay(pdMS_TO_TICKS(1000));
 

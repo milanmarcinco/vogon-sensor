@@ -37,5 +37,5 @@ menu "Vogon Configuration"
 
 	config DEBUG_SKIP_MEASUREMENTS
 		bool "DEBUG: Skip measurements"
-		default false
+		default n
 endmenu
