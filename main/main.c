@@ -1,6 +1,5 @@
-#include "stdio.h"
 #include "inttypes.h"
-#include "stdbool.h"
+#include "stdio.h"
 
 #include "driver/gpio.h"
 #include "driver/rtc_io.h"
@@ -58,9 +57,10 @@ void app_main(void) {
 
 	bool woke_from_boot_button = (wakeup_causes & BIT(ESP_SLEEP_WAKEUP_EXT0)) != 0;
 
-	rtc_gpio_hold_dis(BLUETOOTH_TRIGGER_GPIO);	   // Allow GPIO pin reconfiguration
-	rtc_gpio_pullup_dis(BLUETOOTH_TRIGGER_GPIO);   // Clear any previous pull-ups
-	rtc_gpio_pulldown_dis(BLUETOOTH_TRIGGER_GPIO); // Clear any previous pull-downs
+	ESP_ERROR_CHECK(rtc_gpio_hold_dis(BLUETOOTH_TRIGGER_GPIO));		// Allow GPIO pin reconfiguration
+	ESP_ERROR_CHECK(rtc_gpio_pullup_dis(BLUETOOTH_TRIGGER_GPIO));	// Clear any previous pull-ups
+	ESP_ERROR_CHECK(rtc_gpio_pulldown_dis(BLUETOOTH_TRIGGER_GPIO)); // Clear any previous pull-downs
+	ESP_ERROR_CHECK(rtc_gpio_deinit(BLUETOOTH_TRIGGER_GPIO));		// Return wake pin to digital GPIO
 
 	ESP_LOGI(TAG, "Reset reason: %d", reset_reason);
 	ESP_LOGI(TAG, "Wakeup causes: 0x%" PRIx32, wakeup_causes);
@@ -117,15 +117,15 @@ void app_main(void) {
 	// Initialize sync semaphore to number of concurrent tasks
 	sync_mutex = xSemaphoreCreateCounting(TASK_COUNT, 0);
 
-	// ESP_LOGI(TAG, "Starting DHT22 task!");
-	// xTaskCreatePinnedToCore(
-	// 	dht22_task,
-	// 	"dht22",
-	// 	configMINIMAL_STACK_SIZE * 8,
-	// 	NULL,
-	// 	10,
-	// 	NULL,
-	// 	APP_CPU_NUM);
+	ESP_LOGI(TAG, "Starting DHT22 task!");
+	xTaskCreatePinnedToCore(
+		dht22_task,
+		"dht22",
+		configMINIMAL_STACK_SIZE * 8,
+		NULL,
+		10,
+		NULL,
+		APP_CPU_NUM);
 
 	ESP_LOGI(TAG, "Starting SDS011 task!");
 	xTaskCreatePinnedToCore(
@@ -161,12 +161,17 @@ prepare_for_deep_sleep:
 
 	// Prepare for deep sleep
 
-	uint64_t sleep_time = shared_config.SENSORS_GENERAL_MEASUREMENT_INTERVAL * 60 * 1000000;
+	int sleep_minutes = shared_config.SENSORS_GENERAL_MEASUREMENT_INTERVAL;
+	if (sleep_minutes <= 0) sleep_minutes = CONFIG_SENSORS_GENERAL_MEASUREMENT_INTERVAL;
+	uint64_t sleep_time = (uint64_t)sleep_minutes * 60 * 1000000;
 
-	ESP_LOGI(TAG, "Going to sleep for %d minutes...", shared_config.SENSORS_GENERAL_MEASUREMENT_INTERVAL);
-	rtc_gpio_pullup_dis(BLUETOOTH_TRIGGER_GPIO);  // Make sure pull-up is off
-	rtc_gpio_pulldown_en(BLUETOOTH_TRIGGER_GPIO); // Have GPIO pin default to LOW
-	esp_sleep_enable_ext0_wakeup(BLUETOOTH_TRIGGER_GPIO, 0);
-	rtc_gpio_hold_en(BLUETOOTH_TRIGGER_GPIO); // Freeze GPIO configuration
+	ESP_LOGI(TAG, "Going to sleep for %d minutes...", sleep_minutes);
+
+	ESP_ERROR_CHECK(rtc_gpio_init(BLUETOOTH_TRIGGER_GPIO));
+	ESP_ERROR_CHECK(rtc_gpio_set_direction(BLUETOOTH_TRIGGER_GPIO, RTC_GPIO_MODE_INPUT_ONLY));
+	ESP_ERROR_CHECK(rtc_gpio_pulldown_dis(BLUETOOTH_TRIGGER_GPIO));
+	ESP_ERROR_CHECK(rtc_gpio_pullup_en(BLUETOOTH_TRIGGER_GPIO));
+	ESP_ERROR_CHECK(esp_sleep_enable_ext0_wakeup(BLUETOOTH_TRIGGER_GPIO, 0));
+
 	esp_deep_sleep(sleep_time);
 }

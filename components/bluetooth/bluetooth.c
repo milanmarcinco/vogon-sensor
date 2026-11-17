@@ -19,8 +19,8 @@
 #include "bluetooth.h"
 #include "internal/led.h"
 
-#include "shared.h"
 #include "helpers.h"
+#include "shared.h"
 
 // static const char *TAG = "MODULE[bluetooth]";
 static const char *TAG_MAIN = "MODULE[bluetooth][main]";
@@ -80,7 +80,7 @@ static uint8_t config_service_uuid[ESP_UUID_LEN_128] = {
 #define NUM_CHARACTERISTICS 2
 
 static const uint16_t config_characteristic_uuid = 0x0101;
-static const size_t config_characteristic_value_size = 1024;
+static const size_t config_characteristic_value_size = 512;
 
 static const uint16_t mac_address_characteristic_uuid = 0x0201;
 static const size_t mac_address_characteristic_value_size = 0;
@@ -239,13 +239,11 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 		case ESP_GATTS_START_EVT:
 			ESP_LOGI(TAG_GATTS_PROFILE, "[ESP_GATTS_START_EVT]: Service started");
 			bt_led_state = LED_BLINK_SLOW;
-			xSemaphoreTake(ble_mutex, portMAX_DELAY);
 			break;
 
 		case ESP_GATTS_STOP_EVT:
 			ESP_LOGI(TAG_GATTS_PROFILE, "[ESP_GATTS_STOP_EVT]: Service stopped");
 			bt_led_state = LED_OFF;
-			xSemaphoreGive(ble_mutex);
 			break;
 
 		case ESP_GATTS_CONNECT_EVT: {
@@ -288,6 +286,11 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 
 				if (offset < len) {
 					len -= offset;
+
+					if (len > sizeof(rsp.attr_value.value)) {
+						len = sizeof(rsp.attr_value.value);
+					}
+
 					memcpy(rsp.attr_value.value, data + offset, len);
 				} else
 					len = 0;
@@ -316,7 +319,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 				get_mac_address_string(mac_address);
 
 				if (len > 0) len -= 1; // Exclude null terminator
-				
+
 				if (offset < len) {
 					len -= offset;
 					memcpy(rsp.attr_value.value, mac_address + offset, len);
@@ -331,7 +334,7 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 				esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, &rsp);
 				return;
 			}
-			
+
 			break;
 		}
 
@@ -441,25 +444,14 @@ static void gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_
 }
 
 void bluetooth_gatt_server_start() {
+	if (xSemaphoreTake(ble_mutex, 0) != pdTRUE) {
+		ESP_LOGW(TAG_MAIN, "Bluetooth is already running");
+		return;
+	}
+
+	is_idle = true;
+	idle_seconds = 0;
 	bt_led_state = LED_OFF;
-
-	xTaskCreatePinnedToCore(
-		led_task,
-		"led",
-		configMINIMAL_STACK_SIZE * 8,
-		NULL,
-		10,
-		NULL,
-		APP_CPU_NUM);
-
-	xTaskCreatePinnedToCore(
-		bluetooth_gatt_server_idle_task,
-		"bluetooth_gatt_server_idle_task",
-		configMINIMAL_STACK_SIZE * 8,
-		NULL,
-		10,
-		NULL,
-		APP_CPU_NUM);
 
 	esp_err_t ret;
 
@@ -467,13 +459,13 @@ void bluetooth_gatt_server_start() {
 	ret = esp_bt_controller_init(&bt_cfg);
 	if (ret) {
 		ESP_LOGE(TAG_MAIN, "%s enable controller failed", __func__);
-		return;
+		goto start_failed;
 	}
 
 	ret = esp_bt_controller_enable(ESP_BT_MODE_BLE);
 	if (ret) {
 		ESP_LOGE(TAG_MAIN, "%s enable controller failed", __func__);
-		return;
+		goto start_failed;
 	}
 
 	ESP_LOGI(TAG_MAIN, "%s init bluetooth", __func__);
@@ -481,12 +473,12 @@ void bluetooth_gatt_server_start() {
 	ret = esp_bluedroid_init();
 	if (ret) {
 		ESP_LOGE(TAG_MAIN, "%s init bluetooth failed", __func__);
-		return;
+		goto start_failed;
 	}
 	ret = esp_bluedroid_enable();
 	if (ret) {
 		ESP_LOGE(TAG_MAIN, "%s enable bluetooth failed", __func__);
-		return;
+		goto start_failed;
 	}
 
 	esp_ble_gatts_register_callback(gatts_event_handler);
@@ -495,7 +487,7 @@ void bluetooth_gatt_server_start() {
 	ret = esp_ble_gatts_app_register(PROFILE_APP_ID);
 	if (ret) {
 		ESP_LOGE(TAG_MAIN, "gatts app register error, error code = %x", ret);
-		return;
+		goto start_failed;
 	}
 
 	esp_err_t local_mtu_ret = esp_ble_gatt_set_local_mtu(512);
@@ -503,9 +495,18 @@ void bluetooth_gatt_server_start() {
 		ESP_LOGE(TAG_MAIN, "set local  MTU failed, error code = %x", local_mtu_ret);
 	}
 
+	xTaskCreatePinnedToCore(led_task, "led", configMINIMAL_STACK_SIZE * 8,
+							NULL, 10, NULL, APP_CPU_NUM);
+
+	xTaskCreatePinnedToCore(bluetooth_gatt_server_idle_task, "bluetooth_gatt_server_idle_task",
+							configMINIMAL_STACK_SIZE * 8, NULL, 10, NULL, APP_CPU_NUM);
+
 	ESP_LOGI(TAG_MAIN, "Bluetooth initialized successfully");
 
 	return;
+
+start_failed:
+	xSemaphoreGive(ble_mutex);
 }
 
 // Start GATT server on GPIO trigger
@@ -557,6 +558,7 @@ void bluetooth_gatt_server_idle_task(void *arg) {
 				esp_bt_controller_deinit();
 				vTaskDelay(pdMS_TO_TICKS(100));
 
+				xSemaphoreGive(ble_mutex);
 				vTaskDelete(NULL);
 			}
 		} else {

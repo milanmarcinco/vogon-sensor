@@ -11,6 +11,9 @@
 
 static const char *TAG = "MODULE[shared]";
 
+// Security protocol: 0 = open, 3 = WPA2 PSK, 5 = WPA2 Enterprise
+static const uint8_t SYNC_WIFI_PROTOCOL = 3;
+
 SemaphoreHandle_t sync_mutex;
 SemaphoreHandle_t ble_mutex;
 shared_data_t shared_data = {0};
@@ -46,7 +49,7 @@ config_mapping_t mappings[] = {
 	{shared_config.SYNC_WIFI_SSID, sizeof(char) * 32, CFG_KEY_SYNC_WIFI_SSID, TYPE_STR, .default_str = ""},
 	{shared_config.SYNC_WIFI_USERNAME, sizeof(char) * 64, CFG_KEY_SYNC_WIFI_USERNAME, TYPE_STR, .default_str = ""},
 	{shared_config.SYNC_WIFI_PASSWORD, sizeof(char) * 64, CFG_KEY_SYNC_WIFI_PASSWORD, TYPE_STR, .default_str = ""},
-	{&shared_config.SYNC_WIFI_PROTOCOL, sizeof(int), CFG_KEY_SYNC_WIFI_PROTOCOL, TYPE_INT, .default_int = CONFIG_SYNC_WIFI_PROTOCOL},
+	{&shared_config.SYNC_WIFI_PROTOCOL, sizeof(int), CFG_KEY_SYNC_WIFI_PROTOCOL, TYPE_INT, .default_int = SYNC_WIFI_PROTOCOL},
 
 	{shared_config.SYNC_MQTT_BROKER_URL, sizeof(char) * 256, CFG_KEY_SYNC_MQTT_BROKER_URL, TYPE_STR, .default_str = CONFIG_SYNC_MQTT_BROKER_URL}};
 

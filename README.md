@@ -49,6 +49,8 @@ idf.py flash monitor         # Flash and open serial monitor
 
 Project / feature toggles live in Kconfig menus (run `idf.py menuconfig`). Shared defaults live in `sdkconfig.defaults`; optional `sdkconfig.local` overrides them for a local build and is ignored in VCS. The generated config lives in `build/sdkconfig` and is regenerated when either defaults file changes. Persist configuration changes in the defaults files; menuconfig changes are lost on regeneration. Do not use `idf.py save-defconfig` with local secrets loaded.
 
+Project options are defined in `main/Kconfig.projbuild`; for example, `config BLE_IDLE_TIMEOUT` becomes `CONFIG_BLE_IDLE_TIMEOUT`. Keep local values in `sdkconfig.local`, including disabled booleans as `# CONFIG_DEBUG_SKIP_MEASUREMENTS is not set`. After changing an option in menuconfig, copy its setting from `build/sdkconfig` to `sdkconfig.local` to persist it. The build generates `build/config/sdkconfig.h` for C code; do not edit that header.
+
 ## MQTT Topics and messages
 
 By default, the firmware publishes sensor data to the following MQTT topic: `vogonair/:mac_address/raw`.
