@@ -141,7 +141,7 @@ esp_err_t load_shared_config() {
 				}
 
 				strncpy((char *)mapping->destination, value, mapping->destination_size - 1);
-				((char *)mapping->destination)[strlen(value)] = '\0';
+				((char *)mapping->destination)[mapping->destination_size - 1] = '\0';
 
 				break;
 			}
