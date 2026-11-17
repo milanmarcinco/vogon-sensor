@@ -200,6 +200,11 @@ static const esp_gatts_attr_db_t gatts_attr_db[CONFIG_SERVICE_IDX_MAX] =
 
 static uint16_t config_service_handle_table[CONFIG_SERVICE_IDX_MAX];
 
+static void restart_task(void *arg) {
+	vTaskDelay(pdMS_TO_TICKS(3000));
+	esp_restart();
+}
+
 static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
 	switch (event) {
 		case ESP_GATTS_REG_EVT: {
@@ -386,8 +391,12 @@ static void gatts_profile_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_
 				ESP_LOGI(TAG_GATTS_PROFILE, "Restart requested via GATT");
 
 				esp_ble_gatts_send_response(gatts_if, conn_id, trans_id, ESP_GATT_OK, NULL);
-				vTaskDelay(pdMS_TO_TICKS(3000));
-				esp_restart();
+
+				if (xTaskCreate(restart_task, "ble_restart", configMINIMAL_STACK_SIZE * 4, NULL, 5, NULL) != pdPASS) {
+					ESP_LOGE(TAG_GATTS_PROFILE, "Failed to create restart task, restarting immediately");
+					esp_restart();
+				}
+
 				return;
 			}
 
