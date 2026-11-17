@@ -1,5 +1,7 @@
 build/
 managed_components/
+.cache/
+
 certs/*
 
 sdkconfig
