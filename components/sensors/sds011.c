@@ -21,7 +21,14 @@ static const uint8_t QUERY_MODE = 0x01;
 static const uint8_t WORK_STATE = 0x01;
 static const uint8_t SLEEP_STATE = 0x00;
 
-static esp_err_t sds011_send_command(const uint8_t payload[13], char *response) {
+#define RESPONSE_LEN 10
+#define RESPONSE_HEAD 0xAA
+#define RESPONSE_TAIL 0xAB
+#define RESPONSE_CMD_REPLY 0xC5
+#define RESPONSE_CMD_DATA 0xC0
+#define RESPONSE_TIMEOUT_MS 1500
+
+static esp_err_t sds011_send_command(const uint8_t payload[13], uint8_t *response, uint8_t expected_cmd) {
 	int len;
 	uint8_t command[] = {
 		0xAA, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -36,40 +43,64 @@ static esp_err_t sds011_send_command(const uint8_t payload[13], char *response) 
 	}
 	command[17] = (uint8_t)(checksum & 0xFF);
 
+	uart_flush_input(UART_NUM_2);
+
 	uart_write_bytes(UART_NUM_2, (const char *)command, 19);
 	ESP_ERROR_CHECK(uart_wait_tx_done(UART_NUM_2, pdMS_TO_TICKS(250)));
-	len = uart_read_bytes(UART_NUM_2, response, 10, pdMS_TO_TICKS(250));
 
-	if (len != 10) {
-		ESP_LOGE(TAG, "Error reading response: %d", len);
-		return ESP_FAIL;
+	TickType_t start = xTaskGetTickCount();
+	while (xTaskGetTickCount() - start < pdMS_TO_TICKS(RESPONSE_TIMEOUT_MS)) {
+		len = uart_read_bytes(UART_NUM_2, response, 1, pdMS_TO_TICKS(100));
+		if (len != 1 || response[0] != RESPONSE_HEAD) continue;
+
+		len = uart_read_bytes(UART_NUM_2, response + 1, RESPONSE_LEN - 1, pdMS_TO_TICKS(250));
+		if (len != RESPONSE_LEN - 1) {
+			ESP_LOGE(TAG, "Error reading response: %d", len + 1);
+			return ESP_FAIL;
+		}
+
+		if (response[9] != RESPONSE_TAIL) continue;
+
+		uint8_t response_checksum = 0;
+		for (int i = 2; i <= 7; i++) {
+			response_checksum += response[i];
+		}
+
+		if (response_checksum != response[8]) {
+			ESP_LOGW(TAG, "Invalid response checksum: expected %02X, got %02X", response_checksum, response[8]);
+			continue;
+		}
+
+		if (response[1] != expected_cmd) continue;
+
+		return ESP_OK;
 	}
 
-	return ESP_OK;
+	ESP_LOGE(TAG, "No valid response (cmd %02X) within timeout", expected_cmd);
+	return ESP_FAIL;
 }
 
-static esp_err_t sds011_read_reporting_mode(char *buffer, uint8_t *mode) {
+static esp_err_t sds011_read_reporting_mode(uint8_t *buffer, uint8_t *mode) {
 	const uint8_t payload[] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 							   0x00, 0x00, 0x00, 0x00, 0x00};
 
-	if (sds011_send_command(payload, buffer) != ESP_OK) {
+	if (sds011_send_command(payload, buffer, RESPONSE_CMD_REPLY) != ESP_OK) {
 		return ESP_FAIL;
 	}
 
-	*mode = *((uint8_t *)(buffer + 4));
-
+	*mode = buffer[4];
 	return ESP_OK;
 }
 
-static esp_err_t sds011_write_reporting_mode(char *buffer, uint8_t mode) {
+static esp_err_t sds011_write_reporting_mode(uint8_t *buffer, uint8_t mode) {
 	const uint8_t payload[] = {0x02, 0x01, mode, 0x00, 0x00, 0x00, 0x00, 0x00,
 							   0x00, 0x00, 0x00, 0x00, 0x00};
 
-	if (sds011_send_command(payload, buffer) != ESP_OK) {
+	if (sds011_send_command(payload, buffer, RESPONSE_CMD_REPLY) != ESP_OK) {
 		return ESP_FAIL;
 	}
 
-	uint8_t result = *((uint8_t *)(buffer + 4));
+	uint8_t result = buffer[4];
 
 	if (result != mode) {
 		return ESP_FAIL;
@@ -78,11 +109,11 @@ static esp_err_t sds011_write_reporting_mode(char *buffer, uint8_t mode) {
 	return ESP_OK;
 }
 
-static esp_err_t sds011_query_data(char *buffer, uint16_t *pm25, uint16_t *pm10) {
+static esp_err_t sds011_query_data(uint8_t *buffer, uint16_t *pm25, uint16_t *pm10) {
 	const uint8_t payload[] = {0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 							   0x00, 0x00, 0x00, 0x00, 0x00};
 
-	if (sds011_send_command(payload, buffer) != ESP_OK) {
+	if (sds011_send_command(payload, buffer, RESPONSE_CMD_DATA) != ESP_OK) {
 		return ESP_FAIL;
 	}
 
@@ -95,15 +126,15 @@ static esp_err_t sds011_query_data(char *buffer, uint16_t *pm25, uint16_t *pm10)
 	return ESP_OK;
 }
 
-static esp_err_t sds011_write_state(char *buffer, uint8_t state) {
+static esp_err_t sds011_write_state(uint8_t *buffer, uint8_t state) {
 	const uint8_t payload[] = {0x06, 0x01, state, 0x00, 0x00, 0x00, 0x00, 0x00,
 							   0x00, 0x00, 0x00, 0x00, 0x00};
 
-	if (sds011_send_command(payload, buffer) != ESP_OK) {
+	if (sds011_send_command(payload, buffer, RESPONSE_CMD_REPLY) != ESP_OK) {
 		return ESP_FAIL;
 	}
 
-	uint8_t result = *((uint8_t *)(buffer + 4));
+	uint8_t result = buffer[4];
 
 	if (result != state) {
 		return ESP_FAIL;
@@ -130,7 +161,7 @@ void sds011_task(void *arg) {
 
 	uint8_t reporting_mode;
 
-	char data[UART_BUFFER];
+	uint8_t data[UART_BUFFER];
 	memset(&data, 0, UART_BUFFER);
 
 	ESP_LOGI(TAG, "Waking up SDS011");
@@ -151,30 +182,41 @@ void sds011_task(void *arg) {
 		}
 	}
 
-	uint16_t pm25_total = 0;
-	uint16_t pm10_total = 0;
+	uint32_t pm25_total = 0;
+	uint32_t pm10_total = 0;
+	int valid_samples = 0;
 
 	for (int i = 0; i < shared_config.SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE; i++) {
 		uint16_t pm25 = 0;
 		uint16_t pm10 = 0;
 
 		ESP_LOGI(TAG, "Measuring [%d/%d]", i + 1, shared_config.SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE);
-		sds011_query_data(data, &pm25, &pm10);
+		if (sds011_query_data(data, &pm25, &pm10) == ESP_OK) {
+			ESP_LOGI(TAG, "Measured [%d/%d]: PM2.5=%d, PM10=%d",
+					 i + 1, shared_config.SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE,
+					 pm25, pm10);
 
-		ESP_LOGI(TAG, "Measured [%d/%d]: PM2.5=%d, PM10=%d",
-				 i + 1, shared_config.SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE,
-				 pm25, pm10);
-
-		pm25_total += pm25;
-		pm10_total += pm10;
+			pm25_total += pm25;
+			pm10_total += pm10;
+			valid_samples++;
+		} else {
+			ESP_LOGW(TAG, "Measurement [%d/%d] failed, skipping",
+					 i + 1, shared_config.SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE);
+		}
 
 		vTaskDelay(pdMS_TO_TICKS(shared_config.SENSORS_PARTICULATE_MEASUREMENT_BULK_SLEEP * 1000));
 	}
 
-	uint16_t pm25 = pm25_total / shared_config.SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE;
-	uint16_t pm10 = pm10_total / shared_config.SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE;
+	uint16_t pm25 = 0;
+	uint16_t pm10 = 0;
 
-	ESP_LOGI(TAG, "Final measurements: PM2.5=%d, PM10=%d", pm25, pm10);
+	if (valid_samples > 0) {
+		pm25 = pm25_total / valid_samples;
+		pm10 = pm10_total / valid_samples;
+		ESP_LOGI(TAG, "Final measurements (%d valid samples): PM2.5=%d, PM10=%d", valid_samples, pm25, pm10);
+	} else {
+		ESP_LOGE(TAG, "No valid SDS011 measurements");
+	}
 
 	ESP_LOGI(TAG, "Setting SDS011 to sleep");
 	sds011_write_state(data, SLEEP_STATE);
