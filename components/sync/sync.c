@@ -11,7 +11,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "mqtt_client.h"
-#include "sdkconfig.h"
 
 #include "helpers.h"
 #include "shared.h"
@@ -24,6 +23,7 @@
 #define MQTT_CONCURRENT_MESSAGES 4
 #define MQTT_MESSAGE_TIMEOUT_MS 30 * 1000
 #define MQTT_MESSAGE_WAIT_TIME_MS 15 * 1000
+#define MQTT_PUBLISH_FLUSH_TIMEOUT_MS (30 * 1000)
 
 static const char *TAG = "MODULE[sync]";
 
@@ -82,7 +82,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 	}
 }
 
-static void publish(esp_mqtt_client_handle_t *client, const uint16_t sensor, const uint8_t type, const double value) {
+static esp_err_t publish(esp_mqtt_client_handle_t *client, const uint16_t sensor, const uint8_t type, const double value) {
+	esp_err_t ret = ESP_OK;
 	char mac_address[MAC_LEN];
 	char topic[TOPIC_LEN];
 
@@ -96,23 +97,31 @@ static void publish(esp_mqtt_client_handle_t *client, const uint16_t sensor, con
 	get_mac_address_string(mac_address);
 	snprintf(topic, sizeof(topic), "vogonair/%s/raw", mac_address);
 
-	if (message) {
-		BaseType_t ret = xSemaphoreTake(mqtt_publish_mutex, pdMS_TO_TICKS(MQTT_MESSAGE_WAIT_TIME_MS));
-
-		if (ret == pdFALSE) {
-			ESP_LOGE(TAG, "Failed to send MQTT message [sensor=%d, type=%d, value=%.2f] within timeout", sensor, type, value);
-
-			// cJSON_Delete(root);
-			// free(message);
-			// return;
-		}
-
-		ESP_LOGI(TAG, "Publishing to topic %s: %s", topic, message);
-		esp_mqtt_client_publish(*client, topic, message, LEN_AUTO, AT_LEAST_ONCE, NOT_RETAIN);
-		free(message);
+	if (message == NULL) {
+		cJSON_Delete(root);
+		return ESP_ERR_NO_MEM;
 	}
 
+	if (xSemaphoreTake(mqtt_publish_mutex, pdMS_TO_TICKS(MQTT_MESSAGE_WAIT_TIME_MS)) != pdTRUE) {
+		ESP_LOGE(TAG, "Failed to send MQTT message [sensor=%d, type=%d, value=%.2f] within timeout", sensor, type, value);
+		ret = ESP_ERR_TIMEOUT;
+		goto cleanup;
+	}
+
+	ESP_LOGI(TAG, "Publishing to topic %s: %s", topic, message);
+	int msg_id = esp_mqtt_client_publish(*client, topic, message, LEN_AUTO, AT_LEAST_ONCE, NOT_RETAIN);
+
+	if (msg_id < 0) {
+		// No PUBLISHED/DELETED event will follow, return the token here
+		ESP_LOGE(TAG, "Failed to enqueue MQTT message [sensor=%d, type=%d]", sensor, type);
+		xSemaphoreGive(mqtt_publish_mutex);
+		ret = ESP_FAIL;
+	}
+
+cleanup:
+	free(message);
 	cJSON_Delete(root);
+	return ret;
 }
 
 esp_err_t mqtt_sync() {
@@ -160,23 +169,36 @@ esp_err_t mqtt_sync() {
 		ESP_LOGI(TAG, "Connected to MQTT broker: %s", shared_config.SYNC_MQTT_BROKER_URL);
 	} else {
 		ESP_LOGE(TAG, "Failed to connect to MQTT broker: %s", shared_config.SYNC_MQTT_BROKER_URL);
+		esp_mqtt_client_stop(client);
+		esp_mqtt_client_destroy(client);
 		return ESP_FAIL;
 	}
 
 	ESP_LOGI(TAG, "Syncing data...");
-	publish(&client, 0x01, 0x01, shared_data.temperature);
-	publish(&client, 0x01, 0x02, shared_data.humidity);
-	publish(&client, 0x02, 0x03, shared_data.pm25);
-	publish(&client, 0x02, 0x04, shared_data.pm10);
+	esp_err_t ret = ESP_OK;
+	if (publish(&client, 0x01, 0x01, shared_data.temperature) != ESP_OK) ret = ESP_FAIL;
+	if (publish(&client, 0x01, 0x02, shared_data.humidity) != ESP_OK) ret = ESP_FAIL;
+	if (publish(&client, 0x02, 0x03, shared_data.pm25) != ESP_OK) ret = ESP_FAIL;
+	if (publish(&client, 0x02, 0x04, shared_data.pm10) != ESP_OK) ret = ESP_FAIL;
 
-	// Wait for all messages to be published
+	TickType_t flush_start = xTaskGetTickCount();
 	while (uxSemaphoreGetCount(mqtt_publish_mutex) != MQTT_CONCURRENT_MESSAGES) {
+		if (xTaskGetTickCount() - flush_start >= pdMS_TO_TICKS(MQTT_PUBLISH_FLUSH_TIMEOUT_MS)) {
+			ESP_LOGE(TAG, "Timed out waiting for MQTT messages to be acknowledged");
+			ret = ESP_ERR_TIMEOUT;
+			break;
+		}
+
 		vTaskDelay(pdMS_TO_TICKS(50));
 	}
 
-	ESP_LOGI(TAG, "Data synced successfully!");
+	if (ret == ESP_OK) {
+		ESP_LOGI(TAG, "Data synced successfully!");
+	} else {
+		ESP_LOGW(TAG, "Data sync incomplete");
+	}
 
 	esp_mqtt_client_stop(client);
 	esp_mqtt_client_destroy(client);
-	return ESP_OK;
+	return ret;
 }
