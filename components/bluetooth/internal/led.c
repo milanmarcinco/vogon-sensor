@@ -13,7 +13,7 @@
 
 #define LED_GPIO GPIO_NUM_2
 
-bt_led_state_t bt_led_state = LED_OFF;
+volatile bt_led_state_t bt_led_state = LED_OFF;
 
 void led_task(void *arg) {
 	gpio_reset_pin(LED_GPIO);

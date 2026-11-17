@@ -5,5 +5,5 @@ typedef enum {
 	LED_ON
 } bt_led_state_t;
 
-extern bt_led_state_t bt_led_state;
+extern volatile bt_led_state_t bt_led_state;
 void led_task(void *arg);

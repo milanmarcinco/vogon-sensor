@@ -33,8 +33,8 @@ static const char *TAG_GAP = "MODULE[bluetooth][gap]";
 #define PROFILE_APP_IDX 0
 #define PROFILE_APP_ID 0x00
 
-static bool is_idle = true;
-static int idle_seconds = 0;
+static volatile bool is_idle = true;
+static volatile int idle_seconds = 0;
 
 // Type declaration
 
