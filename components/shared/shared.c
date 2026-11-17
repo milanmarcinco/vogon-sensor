@@ -102,10 +102,14 @@ esp_err_t load_shared_config() {
 		return ESP_FAIL;
 
 	cJSON *root = cJSON_Parse(json_string);
+
 	if (root == NULL) {
 		ESP_LOGE(TAG, "Error before: [%s]\n", cJSON_GetErrorPtr());
+		free(json_string);
 		return ESP_FAIL;
 	}
+
+	free(json_string);
 
 	for (size_t i = 0; i < sizeof(mappings) / sizeof(config_mapping_t); i++) {
 		config_mapping_t *mapping = &mappings[i];
@@ -152,6 +156,7 @@ esp_err_t load_shared_config() {
 		}
 	}
 
+	cJSON_Delete(root);
 	return ensure_config() ? ESP_OK : ESP_FAIL;
 }
 
