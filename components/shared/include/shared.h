@@ -1,5 +1,6 @@
 #pragma once
 
+#include "stdbool.h"
 #include "stdint.h"
 
 #include "esp_wifi.h"
@@ -41,6 +42,7 @@ typedef struct {
 	uint16_t co2;
 	float co2_temperature;
 	float co2_humidity;
+	bool co2_valid;
 } shared_data_t;
 
 typedef struct {

@@ -218,11 +218,12 @@ void scd41_task(void *arg) {
 		shared_data.co2 = co2_total / valid_samples;
 		shared_data.co2_temperature = temperature_total / valid_samples;
 		shared_data.co2_humidity = humidity_total / valid_samples;
+		shared_data.co2_valid = true;
 
 		ESP_LOGI(TAG, "Final measurements (%d valid samples): CO2=%dppm, temperature=%.2fC, humidity=%.2f%%",
 				 valid_samples, shared_data.co2, shared_data.co2_temperature, shared_data.co2_humidity);
 	} else {
-		ESP_LOGE(TAG, "No valid SCD41 measurements");
+		ESP_LOGE(TAG, "No valid SCD41 measurements, nothing will be published");
 	}
 
 	// Leave the sensor measuring; only release the bus

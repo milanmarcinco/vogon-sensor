@@ -112,6 +112,7 @@ void app_main(void) {
 	shared_data.co2 = 0;
 	shared_data.co2_temperature = 0;
 	shared_data.co2_humidity = 0;
+	shared_data.co2_valid = false;
 
 #if !CONFIG_DEBUG_SKIP_MEASUREMENTS
 	ESP_LOGI(TAG, "Warming up...");
