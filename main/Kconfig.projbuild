@@ -23,6 +23,19 @@ menu "Vogon Configuration"
 		int "PARTICULATE SENSOR: Measurement bulk sleep"
 		default 10
 
+	config SENSORS_CO2_MEASUREMENT_BULK_SIZE
+		int "CO2 SENSOR: Measurement bulk size"
+		default 3
+
+	config SENSORS_CO2_MEASUREMENT_BULK_SLEEP
+		int "CO2 SENSOR: Measurement bulk sleep (seconds)"
+		default 5
+
+	config SENSORS_CO2_ALTITUDE
+		int "CO2 SENSOR: Sensor altitude above sea level (meters)"
+		range 0 3000
+		default 0
+
 	config SYNC_WIFI_PROTOCOL
 		int "SYNC: WiFi security protocol (ESP-IDF auth mode constant)"
 		default 0

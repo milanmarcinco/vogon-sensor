@@ -1,11 +1,12 @@
 # Vogon Sensor
 
-An ESP-IDF (v6) project for an ESP32-based environmental / air quality sensor node. It gathers readings from attached sensors (DHT22 temperature & humidity, SDS011 particulate matter) and syncs data via MQTT. Designed to be lightweight and power‑aware.
+An ESP-IDF (v6) project for an ESP32-based environmental / air quality sensor node. It gathers readings from attached sensors (DHT22 temperature & humidity, SDS011 particulate matter, SCD41 CO2) and syncs data via MQTT. Designed to be lightweight and power‑aware.
 
 ## Features
 
 -   Reads temperature and humidity data from DHT22 sensor
 -   Reads particulate matter (PM2.5 and PM10) data from SDS011 sensor
+-   Reads CO2, temperature and humidity data from SCD41 sensor
 -   Sends sensor data to a server via MQTT
 -   Connects to WiFi for internet connectivity
 -   Easy configuration and setup via BLE configuration interface
@@ -15,8 +16,22 @@ An ESP-IDF (v6) project for an ESP32-based environmental / air quality sensor no
 -   ESP32 development board
 -   DHT22 temperature and humidity sensor
 -   SDS011 particulate matter sensor
+-   SCD41 CO2 sensor
 -   Breadboard and jumper wires for connections
 -   Power supply (5V USB or battery)
+
+## Wiring
+
+| Sensor | Sensor pin | ESP32 pin |
+| ------ | ---------- | --------- |
+| DHT22  | DATA       | GPIO23    |
+| SDS011 | TXD        | GPIO16    |
+| SDS011 | RXD        | GPIO17    |
+| SCD41  | SDA        | GPIO21    |
+| SCD41  | SCL        | GPIO22    |
+| SCD41  | VDD        | 3V3       |
+
+Power the SCD41 from 3V3 so its I2C pull-ups stay at 3.3 V. The SCD41 measures continuously, including while the ESP32 deep sleeps; the firmware reads it on each wake-up.
 
 ## Partition Table Summary
 
@@ -54,6 +69,20 @@ Project options are defined in `main/Kconfig.projbuild`; for example, `config BL
 ## MQTT Topics and messages
 
 By default, the firmware publishes sensor data to the following MQTT topic: `vogonair/:mac_address/raw`.
+
+Each message is a JSON object `{"sensor": <id>, "parameter": <id>, "value": <number>}`:
+
+| Sensor        | Parameter                | Unit  |
+| ------------- | ------------------------ | ----- |
+| `0x01` DHT22  | `0x01` temperature       | °C    |
+| `0x01` DHT22  | `0x02` humidity          | %     |
+| `0x02` SDS011 | `0x03` PM2.5             | µg/m³ |
+| `0x02` SDS011 | `0x04` PM10              | µg/m³ |
+| `0x03` SCD41  | `0x05` CO2               | ppm   |
+| `0x03` SCD41  | `0x06` temperature       | °C    |
+| `0x03` SCD41  | `0x07` humidity          | %     |
+
+The SCD41 options can also be set over BLE in the config JSON: `co2_bulk_size`, `co2_bulk_sleep` (seconds) and `co2_altitude` (meters above sea level, 0–3000, used for CO2 compensation).
 
 ## Acknowledgment
 

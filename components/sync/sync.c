@@ -180,6 +180,9 @@ esp_err_t mqtt_sync() {
 	if (publish(&client, 0x01, 0x02, shared_data.humidity) != ESP_OK) ret = ESP_FAIL;
 	if (publish(&client, 0x02, 0x03, shared_data.pm25) != ESP_OK) ret = ESP_FAIL;
 	if (publish(&client, 0x02, 0x04, shared_data.pm10) != ESP_OK) ret = ESP_FAIL;
+	if (publish(&client, 0x03, 0x05, shared_data.co2) != ESP_OK) ret = ESP_FAIL;
+	if (publish(&client, 0x03, 0x06, shared_data.co2_temperature) != ESP_OK) ret = ESP_FAIL;
+	if (publish(&client, 0x03, 0x07, shared_data.co2_humidity) != ESP_OK) ret = ESP_FAIL;
 
 	TickType_t flush_start = xTaskGetTickCount();
 	while (uxSemaphoreGetCount(mqtt_publish_mutex) != MQTT_CONCURRENT_MESSAGES) {
