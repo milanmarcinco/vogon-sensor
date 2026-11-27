@@ -115,14 +115,11 @@ static esp_err_t scd41_read_measurement(i2c_master_dev_handle_t dev, uint16_t *c
 	return ESP_OK;
 }
 
-/**
- * Puts the sensor into a known state: idle, altitude set, periodic measurement running.
- * Altitude can only be written while the sensor is idle.
- */
 static esp_err_t scd41_cold_start(i2c_master_dev_handle_t dev) {
 	ESP_LOGI(TAG, "Starting SCD41 periodic measurement (altitude=%dm)", shared_config.SENSORS_CO2_ALTITUDE);
 
-	// May fail when the sensor is already idle; the subsequent commands verify the state.
+	// Altitude can only be written while idle. Stop may fail if the sensor is already
+	// idle, so its result is ignored; the following commands fail if the state is wrong.
 	scd41_send_command(dev, CMD_STOP_PERIODIC_MEASUREMENT);
 	vTaskDelay(pdMS_TO_TICKS(STOP_PERIODIC_MS));
 
@@ -226,7 +223,7 @@ void scd41_task(void *arg) {
 		ESP_LOGE(TAG, "No valid SCD41 measurements, nothing will be published");
 	}
 
-	// Leave the sensor measuring; only release the bus
+	// Not stopping the sensor on purpose: it must keep measuring through deep sleep
 	ESP_ERROR_CHECK(i2c_master_bus_rm_device(dev));
 	ESP_ERROR_CHECK(i2c_del_master_bus(bus));
 
