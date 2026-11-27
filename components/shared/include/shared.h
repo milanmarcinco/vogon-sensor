@@ -1,5 +1,6 @@
 #pragma once
 
+#include "stdbool.h"
 #include "stdint.h"
 
 #include "esp_wifi.h"
@@ -27,6 +28,9 @@
 #define CFG_KEY_SENSORS_PARTICULATE_WARM_UP "particulate_warm_up"
 #define CFG_KEY_SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE "particulate_bulk_size"
 #define CFG_KEY_SENSORS_PARTICULATE_MEASUREMENT_BULK_SLEEP "particulate_bulk_sleep"
+#define CFG_KEY_SENSORS_CO2_MEASUREMENT_BULK_SIZE "co2_bulk_size"
+#define CFG_KEY_SENSORS_CO2_MEASUREMENT_BULK_SLEEP "co2_bulk_sleep"
+#define CFG_KEY_SENSORS_CO2_ALTITUDE "co2_altitude"
 
 // ===== ===== ===== =====
 
@@ -35,6 +39,10 @@ typedef struct {
 	float humidity;
 	uint16_t pm25;
 	uint16_t pm10;
+	uint16_t co2;
+	float co2_temperature;
+	float co2_humidity;
+	bool co2_valid;
 } shared_data_t;
 
 typedef struct {
@@ -46,6 +54,10 @@ typedef struct {
 	int SENSORS_PARTICULATE_WARM_UP;
 	int SENSORS_PARTICULATE_MEASUREMENT_BULK_SIZE;
 	int SENSORS_PARTICULATE_MEASUREMENT_BULK_SLEEP;
+
+	int SENSORS_CO2_MEASUREMENT_BULK_SIZE;
+	int SENSORS_CO2_MEASUREMENT_BULK_SLEEP;
+	int SENSORS_CO2_ALTITUDE;
 
 	char SYNC_WIFI_SSID[32];
 	char SYNC_WIFI_USERNAME[64];

@@ -21,7 +21,7 @@
 static const char *TAG = "MODULE[main]";
 
 // Number of concurrent tasks running measurements to wait for before MQTT sync
-#define TASK_COUNT 2
+#define TASK_COUNT 3
 
 #define BLUETOOTH_TRIGGER_GPIO GPIO_NUM_0
 
@@ -109,6 +109,10 @@ void app_main(void) {
 	shared_data.humidity = 0,
 	shared_data.pm25 = 0;
 	shared_data.pm10 = 0;
+	shared_data.co2 = 0;
+	shared_data.co2_temperature = 0;
+	shared_data.co2_humidity = 0;
+	shared_data.co2_valid = false;
 
 #if !CONFIG_DEBUG_SKIP_MEASUREMENTS
 	ESP_LOGI(TAG, "Warming up...");
@@ -131,6 +135,16 @@ void app_main(void) {
 	xTaskCreatePinnedToCore(
 		sds011_task,
 		"sds011",
+		configMINIMAL_STACK_SIZE * 8,
+		NULL,
+		10,
+		NULL,
+		APP_CPU_NUM);
+
+	ESP_LOGI(TAG, "Starting SCD41 task!");
+	xTaskCreatePinnedToCore(
+		scd41_task,
+		"scd41",
 		configMINIMAL_STACK_SIZE * 8,
 		NULL,
 		10,
